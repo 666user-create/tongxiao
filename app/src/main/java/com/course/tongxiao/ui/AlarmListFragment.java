@@ -58,9 +58,21 @@ public class AlarmListFragment extends Fragment {
 
         adapter = new AlarmListAdapter(
                 (alarm, enabled) -> viewModel.setEnabled(alarm, enabled),
-                this::openEditor);
+                this::openEditor,
+                new com.course.tongxiao.engine.NextTriggerCalculator(resolver));
         list.setLayoutManager(new LinearLayoutManager(requireContext()));
         list.setAdapter(adapter);
+
+        // Re-arming on every app start: AlarmManager registrations are lost when
+        // the APK is reinstalled or the process is force-stopped, which looks like
+        // "the alarm never rings" until the next boot event.
+        new Thread(() -> {
+            try {
+                scheduler.rescheduleAll();
+            } catch (RuntimeException ignored) {
+                // never block the UI on this
+            }
+        }, "alarm-rearm").start();
 
         viewModel.getAlarms().observe(getViewLifecycleOwner(), this::render);
         viewModel.getTomorrowStatus().observe(getViewLifecycleOwner(), subtitle::setText);

@@ -54,6 +54,15 @@
                 android:textSize="11sp"
                 tools:text="智能工作日 · 节假日跳过" />
 
+            <TextView
+                android:id="@+id/alarm_next"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:textColor="@color/muted"
+                android:textSize="11sp"
+                tools:text="下次：明天 07:30" />
+
         </LinearLayout>
 
         <com.google.android.material.materialswitch.MaterialSwitch

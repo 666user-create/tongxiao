@@ -31,6 +31,26 @@
     <string name="edit_time_hint">点上面的时间，用滚轮选择</string>
     <string name="dialog_cancel">取消</string>
     <string name="dialog_ok">确定</string>
+    <string name="edit_test_ring">试响（10 秒后响铃）</string>
+    <string name="edit_test_scheduled">已安排 10 秒后试响，请稍等</string>
+    <string name="edit_test_failed">试响失败：无法安排闹钟，请检查精确闹钟权限</string>
+    <string name="edit_saved_at">已保存，下次响铃：%1$s</string>
+    <string name="edit_saved_no_time">已保存，但该闹钟没有可响的日期（请检查重复设置）</string>
+    <string name="next_today">今天 %1$s</string>
+    <string name="next_tomorrow">明天 %1$s</string>
+    <string name="next_weekday">%1$s %2$s</string>
+    <string name="next_ring_label">下次：%1$s</string>
+    <string name="next_never">下次：无（检查重复设置）</string>
+
+    <string-array name="weekday_short">
+        <item>周一</item>
+        <item>周二</item>
+        <item>周三</item>
+        <item>周四</item>
+        <item>周五</item>
+        <item>周六</item>
+        <item>周日</item>
+    </string-array>
     <string name="alarm_add">新建闹钟</string>
     <string name="day_mon">一</string>
     <string name="day_tue">二</string>

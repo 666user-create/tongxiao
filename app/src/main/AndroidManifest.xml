@@ -20,6 +20,11 @@
     <!-- Registrations do not survive a reboot: rebuild them at boot. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
+    <!-- Step 5.x dorm group: TCP peer links + NSD browse. NSD itself is a system
+         service, but sockets (server and client, including 127.0.0.1 in tests)
+         need INTERNET; both are normal permissions with no runtime prompt. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <application
         android:allowBackup="false"
         android:label="@string/app_name"

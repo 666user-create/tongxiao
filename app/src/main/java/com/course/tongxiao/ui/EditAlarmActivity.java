@@ -27,6 +27,10 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.materialswitch.MaterialSwitch;
 import com.google.android.material.slider.Slider;
 
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -100,6 +104,7 @@ public class EditAlarmActivity extends AppCompatActivity {
         repeatGroup.setOnCheckedChangeListener((group, checkedId) -> updateVisibility());
 
         findViewById(R.id.edit_save).setOnClickListener(v -> save());
+        findViewById(R.id.edit_test_ring).setOnClickListener(v -> testRing());
         MaterialButton delete = findViewById(R.id.edit_delete);
         delete.setVisibility(alarmId > 0 ? View.VISIBLE : View.GONE);
         delete.setOnClickListener(v -> delete());
@@ -228,20 +233,14 @@ public class EditAlarmActivity extends AppCompatActivity {
         return Alarm.RepeatMode.WORKDAY_SMART;
     }
 
-    private void save() {
-        Alarm.RepeatMode mode = readRepeatMode();
-        int dayMask = readDayMask();
-        if (mode == Alarm.RepeatMode.CUSTOM && dayMask == 0) {
-            Toast.makeText(this, R.string.edit_need_day, Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        final Alarm alarm = existing != null ? existing : new Alarm();
+    /** Builds an Alarm from the current form, reusing the loaded row when editing. */
+    private Alarm collectForm() {
+        Alarm alarm = existing != null ? existing : new Alarm();
         alarm.hour = hour;
         alarm.minute = minute;
         alarm.label = labelInput.getText() == null ? "" : labelInput.getText().toString().trim();
-        alarm.repeatMode = mode;
-        alarm.dayMask = dayMask;
+        alarm.repeatMode = readRepeatMode();
+        alarm.dayMask = readDayMask();
         alarm.skipHolidays = skipHolidaysSwitch.isChecked();
         alarm.snoozeMin = (int) snoozeSlider.getValue();
         alarm.vibrate = vibrateSwitch.isChecked();
@@ -249,21 +248,80 @@ public class EditAlarmActivity extends AppCompatActivity {
         alarm.challengeOverrideJson = challengeSwitch.isChecked()
                 ? ChallengeConfig.quizDefault().toJson() : null;
         alarm.enabled = true; // saving an alarm implies enabling it
+        return alarm;
+    }
+
+    private void save() {
+        Alarm.RepeatMode mode = readRepeatMode();
+        if (mode == Alarm.RepeatMode.CUSTOM && readDayMask() == 0) {
+            Toast.makeText(this, R.string.edit_need_day, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        final Alarm alarm = collectForm();
 
         worker.execute(() -> {
+            String when = null;
             try {
                 if (alarm.id > 0) {
                     repository.update(alarm);
                 } else {
                     alarm.id = (int) repository.insert(alarm);
                 }
-                scheduler.schedule(alarm);
+                long trigger = scheduler.schedule(alarm);
+                if (trigger > 0) {
+                    LocalDateTime next = LocalDateTime.ofInstant(
+                            Instant.ofEpochMilli(trigger), ZoneId.systemDefault());
+                    when = formatNext(next);
+                }
             } catch (RuntimeException e) {
                 // Persisted anyway: the boot/time-change sweep will re-arm it.
-            } finally {
-                runOnUiThread(this::finish);
+            }
+            final String message = when == null
+                    ? getString(R.string.edit_saved_no_time)
+                    : getString(R.string.edit_saved_at, when);
+            runOnUiThread(() -> {
+                Toast.makeText(this, message, Toast.LENGTH_LONG).show();
+                finish();
+            });
+        });
+    }
+
+    /**
+     * Rings the alarm once, 10 seconds from now, without touching its regular
+     * schedule. This is the "why is nothing happening" self-test: it proves the
+     * whole receiver → service → screen chain works on this device.
+     */
+    private void testRing() {
+        final Alarm alarm = collectForm();
+        Toast.makeText(this, R.string.edit_test_scheduled, Toast.LENGTH_SHORT).show();
+        worker.execute(() -> {
+            try {
+                if (alarm.id <= 0) {
+                    alarm.id = (int) repository.insert(alarm);
+                } else {
+                    repository.update(alarm);
+                }
+                scheduler.scheduleAt(alarm, LocalDateTime.now().plusSeconds(10));
+            } catch (RuntimeException e) {
+                runOnUiThread(() -> Toast.makeText(this, R.string.edit_test_failed,
+                        Toast.LENGTH_LONG).show());
             }
         });
+    }
+
+    /** "今天 07:30" / "明天 07:30" / "周三 07:30". */
+    private String formatNext(LocalDateTime next) {
+        LocalDate today = LocalDate.now();
+        String clock = String.format(Locale.CHINA, "%02d:%02d", next.getHour(), next.getMinute());
+        if (next.toLocalDate().equals(today)) {
+            return getString(R.string.next_today, clock);
+        }
+        if (next.toLocalDate().equals(today.plusDays(1))) {
+            return getString(R.string.next_tomorrow, clock);
+        }
+        String[] week = getResources().getStringArray(R.array.weekday_short);
+        int index = next.getDayOfWeek().getValue() - 1;
+        return getString(R.string.next_weekday, week[index], clock);
     }
 
     private void delete() {
