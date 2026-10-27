@@ -44,6 +44,14 @@ android {
             minifyEnabled false
             signingConfig signingConfigs.release
         }
+        // Debug is signed with the SAME key on purpose: a debug build installed
+        // from Android Studio and a release APK copied to the phone then upgrade
+        // each other. Mixing keys makes Android answer
+        // INSTALL_FAILED_UPDATE_INCOMPATIBLE, which looks like "install failed"
+        // with no explanation.
+        debug {
+            signingConfig signingConfigs.release
+        }
     }
 }
 

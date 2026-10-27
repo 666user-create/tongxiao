@@ -69,6 +69,9 @@ adb install -r dist\tongxiao-release.apk
 ```
 
 > 重新打包签名：`gradlew assembleRelease -PtongxiaoKeystore=D:/path/x.jks -PtongxiaoStorePassword=***`
+>
+> **debug 与 release 使用同一签名**（`app/build.gradle` 里 debug 也指向 release signingConfig），所以 Android Studio 装的调试包与拷进手机的 release 包可以互相覆盖升级。若手机上还留着**更早的、用另一把钥匙签的**旧包，第一次需先卸载一次：
+> `adb uninstall com.course.tongxiao` 或 设置 → 应用 → 同晓 → 卸载。
 
 ## 6. 已知限制（答辩要能解释）
 
