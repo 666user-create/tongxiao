@@ -96,7 +96,9 @@ AlarmManager 到点
 
 | 列 | 类型 | 说明 |
 |---|---|---|
-| id | int PK auto | |
+| id | int PK auto | 本机自增，仅本地使用 |
+| uid | text | **稳定标识（UUID，创建时生成）**。跨设备引用一律用 uid（自增 id 在重装/破坏式重建后会重编，跨设备引用会错位） |
+| label | text | 闹钟名（"早八"/"跑步"），列表、停铃页、SYNC_PUSH 展示 |
 | hour / minute | int | |
 | dayMask | int (7bit) | 周一~周日 |
 | repeatMode | enum | ONCE / DAILY / CUSTOM / WORKDAY_SMART |
@@ -114,7 +116,7 @@ AlarmManager 到点
 | 列 | 类型 | 说明 |
 |---|---|---|
 | id | int PK | |
-| alarmId | int FK→alarms | |
+| alarmId | int（**逻辑外键**→alarms.id，无 DB 约束；删闹钟由 Repository 同事务清理事件，见 §3.3） | |
 | fireAt / stopAt | long | epoch millis |
 | type | enum | FIRED / SKIPPED_HOLIDAY / SKIPPED_REASON / SNOOZE / STOPPED / EMERGENCY_STOP / CHALLENGE_FAIL |
 | meta | text(JSON) | 贪睡第几次、答题耗时/错误次数、天气原因、操作来源设备 |
@@ -134,13 +136,21 @@ AlarmManager 到点
 
 | 列 | 类型 | 说明 |
 |---|---|---|
-| ownerDeviceId | text FK→group_members | |
-| **srcAlarmId** | int | **对方 alarms.id**（协议携带，见 §4 CMD_MUTE 定位）|
+| ownerDeviceId | text（逻辑外键→group_members.deviceId） | |
+| **srcAlarmUid** | text | **对方 alarms.uid**（协议携带，见 §4 CMD_MUTE 定位）。用 uid 而非自增 id：对方重装/破坏式重建后 id 会从 1 重编，uid 不变，避免静音错闹钟 |
 | alarmLabel / timeText / repeatText | text | 展示用 |
 | enabled / ringingNow | bool | ringingNow 决定"静音"按钮可用性 |
 | syncedAt | long | |
 
-主键：(ownerDeviceId, srcAlarmId)。SYNC_PUSH 全量替换该 owner 的镜像行。
+主键：(ownerDeviceId, srcAlarmUid)。SYNC_PUSH 全量替换该 owner 的镜像行（替换前接收端强制改写每行 ownerDeviceId，防跨 owner 污染）。
+
+### 3.3 外键与删除语义
+
+所有表间引用为**逻辑外键**（无 DB 级 FOREIGN KEY 约束），原因：Room 会对未加索引的 FK 列报 warning，且 v1 数据量下约束收益低。代价由规则补偿：
+
+- 删除 `alarms` 行时，Repository 必须**同事务**删除其 `alarm_events`（防孤儿事件污染 AdaptiveEngine 统计与统计页）。
+- 删除 `group_members`（退组）时，同事务删除该 owner 的 `remote_alarms` 与 `pending_requests`。
+- 以上清理只发生在 Repository 层；DAO 的 delete 方法 javadoc 注明"勿绕过 Repository 直接调"。
 
 **pending_requests — 待确认请求（改题目/代设闹钟）**
 
@@ -191,8 +201,8 @@ AlarmManager 到点
 |---|---|---|---|
 | HELLO | 双向 | dev, nick | 握手，验组码 |
 | BYE | 双向 | — | 优雅断开 |
-| SYNC_PUSH | 主动 | alarms:[{id,label,time,repeat,enabled,ringing}] | 推自己时刻表，id=本机 alarms.id（需对方授予 bit1 可见） |
-| CMD_MUTE | 发起→执行 | ownerDev, alarmId | 静音响铃中闹钟（alarmId 来自 SYNC_PUSH），立即执行 |
+| SYNC_PUSH | 主动 | alarms:[{uid,label,time,repeat,enabled,ringing}] | 推自己时刻表，uid=本机 alarms.uid（需对方授予 bit1 可见） |
+| CMD_MUTE | 发起→执行 | ownerDev, alarmUid | 静音响铃中闹钟（alarmUid 来自 SYNC_PUSH，执行端按 uid 查本机 alarms），立即执行 |
 | CMD_ACK | 执行→发起 | ok, reason | 回执 |
 | NOTIFY_OP | 执行→发起 | what, at | 操作回执通知（"你静音了小李的 06:40"） |
 | SET_REQUEST | 发起 | reqId, type, payload | 改题目/代设/删闹钟申请 |

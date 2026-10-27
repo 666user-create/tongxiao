@@ -17,10 +17,24 @@ public interface RemoteAlarmDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     void upsertAll(List<RemoteAlarm> rows);
 
-    /** SYNC_PUSH semantics: full replace of one owner's mirror (design.md §3). */
+    /**
+     * SYNC_PUSH semantics: full replace of one owner's mirror (design.md §3).
+     * Every incoming row is force-tagged with ownerDeviceId (never trust the
+     * payload's own owner field — a stray row must not pollute another owner),
+     * and null/empty is a legal "peer deleted all alarms" clear.
+     */
     @Transaction
     default void replaceOwner(String ownerDeviceId, List<RemoteAlarm> rows) {
         clearOwner(ownerDeviceId);
+        if (rows == null || rows.isEmpty()) {
+            return;
+        }
+        for (RemoteAlarm r : rows) {
+            r.ownerDeviceId = ownerDeviceId;
+            if (r.syncedAt == 0) {
+                r.syncedAt = System.currentTimeMillis();
+            }
+        }
         upsertAll(rows);
     }
 

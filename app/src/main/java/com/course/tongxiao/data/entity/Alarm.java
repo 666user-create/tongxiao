@@ -4,6 +4,8 @@ import androidx.annotation.NonNull;
 import androidx.room.Entity;
 import androidx.room.PrimaryKey;
 
+import java.util.UUID;
+
 /** Alarm body, one row per user alarm (design.md §3). */
 @Entity(tableName = "alarms")
 public class Alarm {
@@ -12,6 +14,18 @@ public class Alarm {
 
     @PrimaryKey(autoGenerate = true)
     public int id;
+
+    /**
+     * Stable cross-device identifier (design.md §3/§4). Never reuse {@link #id}
+     * in protocol payloads: autoincrement restarts after destructive rebuild and
+     * would make CMD_MUTE target the wrong alarm.
+     */
+    @NonNull
+    public String uid = UUID.randomUUID().toString();
+
+    /** Human name shown in list/ring screens and SYNC_PUSH ("早八"). */
+    @NonNull
+    public String label = "";
 
     public int hour;
     public int minute;

@@ -2,16 +2,28 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "d5598860f12fede8155a68e9b71b2d6e",
+    "identityHash": "806950917500c35b21d6cb63e08a776c",
     "entities": [
       {
         "tableName": "alarms",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `hour` INTEGER NOT NULL, `minute` INTEGER NOT NULL, `dayMask` INTEGER NOT NULL, `repeatMode` TEXT NOT NULL, `skipHolidays` INTEGER NOT NULL, `ringtoneUri` TEXT, `vibrate` INTEGER NOT NULL, `snoozeMin` INTEGER NOT NULL, `challengeOverrideJson` TEXT, `advanceEnabled` INTEGER NOT NULL, `advanceMaxMin` INTEGER NOT NULL, `enabled` INTEGER NOT NULL, `sharedToGroup` INTEGER NOT NULL)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `uid` TEXT NOT NULL, `label` TEXT NOT NULL, `hour` INTEGER NOT NULL, `minute` INTEGER NOT NULL, `dayMask` INTEGER NOT NULL, `repeatMode` TEXT NOT NULL, `skipHolidays` INTEGER NOT NULL, `ringtoneUri` TEXT, `vibrate` INTEGER NOT NULL, `snoozeMin` INTEGER NOT NULL, `challengeOverrideJson` TEXT, `advanceEnabled` INTEGER NOT NULL, `advanceMaxMin` INTEGER NOT NULL, `enabled` INTEGER NOT NULL, `sharedToGroup` INTEGER NOT NULL)",
         "fields": [
           {
             "fieldPath": "id",
             "columnName": "id",
             "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "uid",
+            "columnName": "uid",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "label",
+            "columnName": "label",
+            "affinity": "TEXT",
             "notNull": true
           },
           {
@@ -213,7 +225,7 @@
       },
       {
         "tableName": "remote_alarms",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`ownerDeviceId` TEXT NOT NULL, `srcAlarmId` INTEGER NOT NULL, `alarmLabel` TEXT NOT NULL, `timeText` TEXT NOT NULL, `repeatText` TEXT NOT NULL, `enabled` INTEGER NOT NULL, `ringingNow` INTEGER NOT NULL, `syncedAt` INTEGER NOT NULL, PRIMARY KEY(`ownerDeviceId`, `srcAlarmId`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`ownerDeviceId` TEXT NOT NULL, `srcAlarmUid` TEXT NOT NULL, `alarmLabel` TEXT NOT NULL, `timeText` TEXT NOT NULL, `repeatText` TEXT NOT NULL, `enabled` INTEGER NOT NULL, `ringingNow` INTEGER NOT NULL, `syncedAt` INTEGER NOT NULL, PRIMARY KEY(`ownerDeviceId`, `srcAlarmUid`))",
         "fields": [
           {
             "fieldPath": "ownerDeviceId",
@@ -222,9 +234,9 @@
             "notNull": true
           },
           {
-            "fieldPath": "srcAlarmId",
-            "columnName": "srcAlarmId",
-            "affinity": "INTEGER",
+            "fieldPath": "srcAlarmUid",
+            "columnName": "srcAlarmUid",
+            "affinity": "TEXT",
             "notNull": true
           },
           {
@@ -268,7 +280,7 @@
           "autoGenerate": false,
           "columnNames": [
             "ownerDeviceId",
-            "srcAlarmId"
+            "srcAlarmUid"
           ]
         }
       },
@@ -371,7 +383,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'd5598860f12fede8155a68e9b71b2d6e')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '806950917500c35b21d6cb63e08a776c')"
     ]
   }
 }

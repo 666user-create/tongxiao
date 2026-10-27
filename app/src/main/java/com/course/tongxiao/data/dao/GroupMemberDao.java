@@ -14,11 +14,25 @@ import java.util.List;
 @Dao
 public interface GroupMemberDao {
 
+    /**
+     * Full-row insert-or-replace. Only call with a row that was read whole via
+     * {@link #getByDeviceId}/{@link #getAll()} — REPLACE drops columns of a
+     * partially built object. For field-level changes use {@link #updateProfile}
+     * or {@link #setGrantedMask}.
+     */
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     void upsert(GroupMember member);
 
     @Delete
-    void delete(GroupMember member);
+    int delete(GroupMember member);
+
+    /** Targeted profile edit (nick/groupKey), leaves joinAt/online untouched. */
+    @Query("UPDATE group_members SET nick = :nick, groupKey = :groupKey WHERE deviceId = :deviceId")
+    int updateProfile(String deviceId, String nick, String groupKey);
+
+    /** Permission edits incl. the settings-page total switch (design.md §3.2): mask=0 revokes. */
+    @Query("UPDATE group_members SET grantedMask = :mask WHERE deviceId = :deviceId")
+    int setGrantedMask(String deviceId, int mask);
 
     @Query("SELECT * FROM group_members ORDER BY joinAt")
     LiveData<List<GroupMember>> observeAll();

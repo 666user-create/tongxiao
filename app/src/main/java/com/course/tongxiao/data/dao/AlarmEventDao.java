@@ -18,7 +18,11 @@ public interface AlarmEventDao {
     @Query("SELECT * FROM alarm_events WHERE alarmId = :alarmId AND fireAt >= :since ORDER BY fireAt")
     List<AlarmEvent> getRecent(int alarmId, long since);
 
-    /** All events in a window for stats screen (Step 6.3). */
+    /** All events in a window for stats screen (Step 6.3). Full scan by design: window is ≤ weeks. */
     @Query("SELECT * FROM alarm_events WHERE fireAt >= :since ORDER BY fireAt")
     List<AlarmEvent> getSince(long since);
+
+    /** Called by AlarmRepository.deleteWithEvents (design.md §3.3), same transaction. */
+    @Query("DELETE FROM alarm_events WHERE alarmId = :alarmId")
+    int deleteByAlarm(int alarmId);
 }
