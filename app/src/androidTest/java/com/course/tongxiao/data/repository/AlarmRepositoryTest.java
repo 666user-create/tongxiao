@@ -3,11 +3,13 @@ package com.course.tongxiao.data.repository;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 import android.content.Context;
 
 import androidx.lifecycle.LiveData;
+import androidx.lifecycle.Observer;
 import androidx.room.Room;
 import androidx.test.core.app.ApplicationProvider;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
@@ -25,11 +27,14 @@ import org.junit.runner.RunWith;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Step 1.3 G2: AlarmRepository behavior, including the §3.3 cascade contract.
- * LiveData is observed on the main looper with a latch, so no extra test rule
- * dependency is needed.
+ *
+ * <p>No {@code allowMainThreadQueries()}: the repository is {@code @WorkerThread}
+ * and calling it from this instrumentation thread must stay legal while main
+ * thread access would still be rejected — keeping that guard active is the point.
  */
 @RunWith(AndroidJUnit4.class)
 public class AlarmRepositoryTest {
@@ -40,9 +45,7 @@ public class AlarmRepositoryTest {
     @Before
     public void setUp() {
         Context ctx = ApplicationProvider.getApplicationContext();
-        db = Room.inMemoryDatabaseBuilder(ctx, TongxiaoDb.class)
-                .allowMainThreadQueries() // test-only
-                .build();
+        db = Room.inMemoryDatabaseBuilder(ctx, TongxiaoDb.class).build();
         repo = new AlarmRepository(db);
     }
 
@@ -59,19 +62,29 @@ public class AlarmRepositoryTest {
         return a;
     }
 
+    /**
+     * Observes on the main looper with a latch, and always removes the observer
+     * so {@link #tearDown()} can close the DB without a leak / late refresh.
+     */
     @SuppressWarnings("unchecked")
     private static <T> T awaitFirstValue(LiveData<T> live) throws InterruptedException {
         final CountDownLatch latch = new CountDownLatch(1);
-        final Object[] box = new Object[1];
-        InstrumentationRegistry.getInstrumentation().runOnMainSync(() ->
-                live.observeForever(value -> {
-                    if (value != null) {
-                        box[0] = value;
-                        latch.countDown();
-                    }
-                }));
-        assertTrue("LiveData did not emit within 5s", latch.await(5, TimeUnit.SECONDS));
-        return (T) box[0];
+        final AtomicReference<Object> box = new AtomicReference<>();
+        final Observer<T> observer = value -> {
+            if (value != null) {
+                box.set(value);
+                latch.countDown();
+            }
+        };
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(
+                () -> live.observeForever(observer));
+        try {
+            assertTrue("LiveData did not emit within 5s", latch.await(5, TimeUnit.SECONDS));
+            return (T) box.get();
+        } finally {
+            InstrumentationRegistry.getInstrumentation().runOnMainSync(
+                    () -> live.removeObserver(observer));
+        }
     }
 
     @Test
@@ -116,6 +129,47 @@ public class AlarmRepositoryTest {
     }
 
     @Test
+    public void deleteWithEvents_rejectsUnpersistedAlarm_andTouchesNothing() {
+        // Orphan bucket risk: an event with alarmId=0 must survive a failed call.
+        AlarmEvent orphan = new AlarmEvent();
+        orphan.alarmId = 0;
+        orphan.fireAt = 1_000;
+        db.alarmEventDao().insert(orphan);
+
+        assertThrows(IllegalArgumentException.class,
+                () -> repo.deleteWithEvents(alarm("未落库", 8)));
+        assertThrows(IllegalArgumentException.class,
+                () -> repo.deleteWithEvents(null));
+
+        assertEquals("orphan events untouched", 1, db.alarmEventDao().getSince(0).size());
+        assertEquals("no alarm rows touched", 0, db.alarmDao().getAll().size());
+    }
+
+    @Test
+    public void deleteWithEvents_secondDeleteReturnsZero_andOtherHistoryKept() {
+        long rowId = repo.insert(alarm("跑步", 6));
+        Alarm stored = db.alarmDao().getById((int) rowId);
+        assertNotNull(stored);
+
+        AlarmEvent own = new AlarmEvent();
+        own.alarmId = (int) rowId;
+        own.fireAt = 1_000;
+        db.alarmEventDao().insert(own);
+
+        long otherRowId = repo.insert(alarm("早八", 7));
+        AlarmEvent foreign = new AlarmEvent();
+        foreign.alarmId = (int) otherRowId;
+        foreign.fireAt = 2_000;
+        db.alarmEventDao().insert(foreign);
+
+        assertEquals(1, repo.deleteWithEvents(stored));
+        assertEquals("second delete is a no-op", 0, repo.deleteWithEvents(stored));
+
+        assertEquals("foreign history intact", 1, db.alarmEventDao().getSince(0).size());
+        assertEquals((int) otherRowId, db.alarmEventDao().getSince(0).get(0).alarmId);
+    }
+
+    @Test
     public void setEnabled_touchesOnlyEnabled() {
         long rowId = repo.insert(alarm("背单词", 23));
         Alarm stored = db.alarmDao().getById((int) rowId);
@@ -142,5 +196,9 @@ public class AlarmRepositoryTest {
         List<Alarm> enabled = repo.getEnabled();
         assertEquals(1, enabled.size());
         assertEquals("开", enabled.get(0).label);
+
+        // getAll() must include disabled rows: rescheduleAll cancels their
+        // stale registrations (Step 2.2).
+        assertEquals(2, repo.getAll().size());
     }
 }

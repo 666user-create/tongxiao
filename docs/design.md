@@ -164,7 +164,13 @@ AlarmManager 到点
 | condition / minTemp | text / int | 恶劣判定输入 |
 | fetchedAt | long | 超 24h 视为无效 |
 
-全局默认挑战配置、定位城市、保活开关等存 SharedPreferences。
+全局默认挑战配置、定位城市、组权限总闸存 SharedPreferences（`tongxiao_settings`），口径固定：
+
+| 键 | 默认 | 语义 |
+|---|---|---|
+| `default_challenge_json` | `null` | null = 继承 ChallengeEngine 内置默认；每闹钟覆盖仍在 `alarms.challengeOverrideJson` |
+| `weather_city` | `""` | 空 = 天气功能关闭（不请求、不提前） |
+| `group_master_on` | `true` | 组权限总闸，见 §3.2 |
 
 ### 3.2 权限模型（宿舍协作的安全边界）
 
@@ -177,7 +183,7 @@ AlarmManager 到点
 - 挑战参数钳制：题数≤5、选项≤4、必须保留紧急停止；越界直接拒绝并回错误码
 - 静音指令只对 `ringingNow=true` 的闹钟生效，且要求 TCP 连接 60s 内有心跳
 - 所有远程操作写 `alarm_events.meta`（来源设备+操作类型），宿舍页"操作通知流"可见
-- 设置页总闸：一键关闭全部组员权限（grantedMask 清零）
+- 设置页总闸（`group_master_on`）：**协议层闸门，不改数据**。关闭后 `PeerLink` 一律拒绝执行 CMD_MUTE / SET_REQUEST（回 `CMD_ACK ok=false, reason=MASTER_SWITCH_OFF`），但 `grantedMask` 保持原样——避免"关→开"后所有授权丢失。要真正收回某人权限，用成员详情里的逐项授权开关（`setGrantedMask`），两者职责分离。
 
 代设闹钟的离线场景（舍友在家帮你设明早考试闹钟，你在宿舍睡着）：请求挂起 `pending_requests`，2 小时无人值守自动作废；若你醒来（app 前台）仍有 PENDING，弹补确认。**不做"永远不生效"也不做"偷偷生效"。**
 

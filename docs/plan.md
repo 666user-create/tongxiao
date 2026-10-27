@@ -30,7 +30,7 @@
 - 工程目录 `D:\Android\tongxiao\app`（仓库已在 git，docs 先行）
 - 工具链锁死：AGP 8.13.2 / Gradle 8.14.3（wrapper 用腾讯云镜像）/ JDK 17（`D:\Android\jdk-17`）/ compileSdk 36 / minSdk 26
 - 语言 Java 为主；不引入 Kotlin、不引入 Hilt（用 Application 手动注入单例，课程项目够用且答辩好讲）
-- 依赖白名单：material、room-{runtime,compiler}、lifecycle-{viewmodel,livedata}、work-runtime、gson、constraintlayout。**测试栈例外（已批准）**：androidx.test:{ext:junit,runner,core} 仅 androidTest 作用域、不进 APK；room-testing 暂不引入（无迁移测试，Step 6.x 需要时再加）。加其他新依赖须走 G3 例外审批（问你）
+- 依赖白名单：material、**appcompat**、room-{runtime,compiler}、lifecycle-{viewmodel,livedata}、work-runtime、gson、constraintlayout。**测试栈例外（已批准）**：androidx.test:{ext:junit,runner,core} 仅 androidTest 作用域、不进 APK；room-testing 暂不引入（无迁移测试，Step 6.x 需要时再加）。加其他新依赖须走 G3 例外审批（问你）
 - 包结构：`com.course.tongxiao.{data,engine,alarm,group,ui,stats}`
 - 提交规范：`feat(step 2.3): RingService 前台服务与响铃链路` —— 一步一 commit，坏了 revert 一步
 - 模拟器策略：AVD `Pixel_7_API_36` 一台主用；网络步骤起第二台（`Pixel_7_API_36_b`，M4 前创建）
