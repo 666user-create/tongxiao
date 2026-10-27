@@ -75,8 +75,16 @@ public class MainActivity extends AppCompatActivity {
 
         // Dorm group seam: the alarm layer owns "mute the ringing alarm" and
         // "apply an accepted request", so it is installed once here (design.md §4).
-        com.course.tongxiao.group.GroupWiring.install(
-                new com.course.tongxiao.alarm.AlarmGatewayImpl(getApplicationContext()));
+        // On a background thread: AlarmGatewayImpl reads the holiday asset and opens
+        // the Room/SettingsStore handles, which must not happen on the UI thread.
+        new Thread(() -> {
+            try {
+                com.course.tongxiao.group.GroupWiring.install(
+                        new com.course.tongxiao.alarm.AlarmGatewayImpl(getApplicationContext()));
+            } catch (RuntimeException ignored) {
+                // The dorm page degrades to "not wired" instead of crashing the app.
+            }
+        }, "group-gateway-install").start();
 
         // Step 6.4: periodic self-check (every 6h) plus one immediate check on
         // launch, so a registration lost to a reinstall/force-stop is healed

@@ -71,11 +71,9 @@ public final class RegionWheelController {
                 selectCity(newValue);
             }
         });
-        districtWheel.setOnValueChangedListener((picker, oldValue, newValue) -> {
-            if (!cascading) {
-                bindValues(districtWheel, districts, newValue);
-            }
-        });
+        // The district wheel has no dependants, so it deliberately has NO listener:
+        // re-binding a wheel to itself on every scroll resets its displayed values
+        // (and the snap animation) for no reason.
     }
 
     /** Selects a province and resets the two dependent wheels to their first entry. */

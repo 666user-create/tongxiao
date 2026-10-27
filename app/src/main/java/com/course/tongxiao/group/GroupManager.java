@@ -297,8 +297,15 @@ public class GroupManager implements PeerLink.Listener {
             Log.w(TAG, "ignoring " + message.type() + " from unidentified " + link.peerKey());
             return;
         }
-        touch(deviceId);
-        coordinator.onCommand(deviceId, message, reply -> link.send(reply));
+        try {
+            touch(deviceId);
+            coordinator.onCommand(deviceId, message, reply -> link.send(reply));
+        } catch (RuntimeException handlerFailure) {
+            // A remote message must never crash the app that is (possibly) ringing:
+            // the reader thread's uncaught exception would take the process down.
+            Log.e(TAG, "failed to handle " + message.type() + " from " + deviceId,
+                    handlerFailure);
+        }
         Observer target = observer;
         if (target != null) {
             target.onPeerMessage(deviceId, message);
@@ -322,7 +329,13 @@ public class GroupManager implements PeerLink.Listener {
         Log.d(TAG, "link " + link.peerKey() + " closed: " + reason
                 + (deviceId == null ? "" : " (device " + deviceId + ")"));
         if (deviceId != null) {
-            db.groupMemberDao().setOnline(deviceId, false, System.currentTimeMillis());
+            try {
+                db.groupMemberDao().setOnline(deviceId, false, System.currentTimeMillis());
+            } catch (RuntimeException dbFailure) {
+                // Closing a link must not crash the reader thread (e.g. DB already
+                // shutting down); the next HELLO repairs the flag anyway.
+                Log.w(TAG, "could not mark " + deviceId + " offline", dbFailure);
+            }
         }
     }
 
@@ -370,6 +383,15 @@ public class GroupManager implements PeerLink.Listener {
             return;
         }
         db.groupMemberDao().setOnline(deviceId, true, System.currentTimeMillis());
+        // The handshake just succeeded, so the peer has a live link: push my schedule
+        // now instead of waiting for the next change-detection push (its mirror would
+        // otherwise stay empty, and the remote-mute entry would have nothing to show).
+        try {
+            broadcastSync();
+        } catch (RuntimeException pushFailure) {
+            // The mirror can be refreshed by the next push; the handshake itself is fine.
+            Log.w(TAG, "schedule push after HELLO failed", pushFailure);
+        }
     }
 
     @Nullable

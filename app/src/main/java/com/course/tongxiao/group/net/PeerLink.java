@@ -263,8 +263,15 @@ public class PeerLink implements Closeable {
                 List<GroupMessage> messages = codec.feed(buffer, 0, read);
                 for (GroupMessage message : messages) {
                     // Listener runs on this thread so ordering is preserved; a
-                    // handler may reply immediately via send().
-                    listener.onMessage(this, message);
+                    // handler may reply immediately via send(). An exception in the
+                    // listener must never kill the link (or the process): a socket
+                    // thread's uncaught exception would take the whole app down.
+                    try {
+                        listener.onMessage(this, message);
+                    } catch (RuntimeException handlerBug) {
+                        Log.e(TAG, peerKey + ": handler failed for " + message.type(),
+                                handlerBug);
+                    }
                 }
                 if (codec.invalidLines() > 0 || codec.oversizeLines() > 0) {
                     Log.w(TAG, peerKey + ": dropped " + codec.invalidLines()

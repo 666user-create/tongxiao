@@ -18,8 +18,10 @@ import androidx.test.ext.junit.runners.AndroidJUnit4;
 import com.course.tongxiao.data.TongxiaoDb;
 import com.course.tongxiao.data.entity.Alarm;
 import com.course.tongxiao.data.repository.AlarmRepository;
+import com.course.tongxiao.data.entity.WeatherCache;
 import com.course.tongxiao.engine.HolidayCalendar;
 import com.course.tongxiao.engine.HolidayResolver;
+import com.course.tongxiao.engine.weather.WeatherClient;
 import com.course.tongxiao.engine.NextTriggerCalculator;
 
 import org.junit.After;
@@ -28,6 +30,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -90,6 +93,67 @@ public class AlarmSchedulerTest {
         return a;
     }
 
+    @Test
+    public void schedule_appliesTheWeatherAdvanceWhenTheAlarmOptedIn() {
+        // This is the wiring test for design.md §5.3: the advance must be part of the
+        // REGISTRATION, and the edit screen's switch is the only writer of
+        // advanceEnabled. Before this test existed nothing ever set that flag, so the
+        // feature was dead code in production while the UI still advertised it.
+        com.course.tongxiao.data.SettingsStore settings =
+                new com.course.tongxiao.data.SettingsStore(ctx);
+        String previousCity = settings.getCity();
+        try {
+            settings.setCity("杭州市");
+            LocalDate today = LocalDate.now();
+            WeatherCache row = new WeatherCache();
+            row.city = "杭州市";
+            row.date = today.toString();
+            row.condition = WeatherClient.CONDITION_RAIN;
+            row.minTemp = 8;
+            row.fetchedAt = System.currentTimeMillis();
+            TongxiaoDb.get(ctx).weatherCacheDao().upsert(row);
+
+            Alarm plain = insertDailySoon();
+            Alarm advanced = insertDailySoon();
+            advanced.advanceEnabled = true;
+            advanced.advanceMaxMin = 20;
+
+            long plainTrigger = scheduler.schedule(plain);
+            long advancedTrigger = scheduler.schedule(advanced);
+
+            assertTrue(plainTrigger > 0 && advancedTrigger > 0);
+            assertEquals("rain advances the alarm by 10 minutes",
+                    plainTrigger - advancedTrigger, 10L * 60 * 1000);
+        } finally {
+            settings.setCity(previousCity);
+            TongxiaoDb.get(ctx).weatherCacheDao().clearAll();
+        }
+    }
+
+    @Test
+    public void schedule_doesNotAdvanceAlarmsThatDidNotOptIn() {
+        com.course.tongxiao.data.SettingsStore settings =
+                new com.course.tongxiao.data.SettingsStore(ctx);
+        String previousCity = settings.getCity();
+        try {
+            settings.setCity("杭州市");
+            WeatherCache row = new WeatherCache();
+            row.city = "杭州市";
+            row.date = LocalDate.now().toString();
+            row.condition = WeatherClient.CONDITION_SNOW;
+            row.minTemp = -5;
+            row.fetchedAt = System.currentTimeMillis();
+            TongxiaoDb.get(ctx).weatherCacheDao().upsert(row);
+
+            Alarm plain = insertDailySoon();
+            long normalTrigger = calc.nextTriggerMillis(plain, LocalDateTime.now());
+            assertEquals("no opt-in means no shift",
+                    normalTrigger, scheduler.schedule(plain));
+        } finally {
+            settings.setCity(previousCity);
+            TongxiaoDb.get(ctx).weatherCacheDao().clearAll();
+        }
+    }
     /** Does our PendingIntent for this alarm exist right now? */
     private boolean hasPendingAlarm(Alarm alarm) {
         Intent intent = new Intent(ctx, AlarmReceiver.class)

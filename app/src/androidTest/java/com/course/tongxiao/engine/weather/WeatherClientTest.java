@@ -447,6 +447,25 @@ public class WeatherClientTest {
     }
 
     @Test
+    public void advancedTriggerAt_refusesToCrossMidnight() {
+        // Seed the forecast for the day the 00:05 alarm rings on (tomorrow).
+        // A 00:05 alarm shifted by 10 minutes would land on the PREVIOUS day, where
+        // the weekday rule is evaluated differently (WORKDAY_SMART is not due on a
+        // Sunday) — the receiver would skip it and re-arm, so the advance must be
+        // refused instead of silently producing a bogus skip.
+        seedCache(CITY, TOMORROW, WeatherClient.CONDITION_RAIN, 8, NOW.toEpochMilli());
+        long justAfterMidnight = triggerAt(0, 5);
+        assertEquals("must not shift into the previous day",
+                justAfterMidnight,
+                client.advancedTriggerAt(advanceAlarm(true, 20), justAfterMidnight, CITY));
+
+        // Same alarm at 00:30 stays on its own day and may be advanced.
+        long laterThatNight = triggerAt(0, 30);
+        assertTrue("same-day advance still works",
+                client.advancedTriggerAt(advanceAlarm(true, 20), laterThatNight, CITY)
+                        < laterThatNight);
+    }
+    @Test
     public void advancedTriggerAt_neverRegistersAPastTrigger() {
         seedCache(CITY, TOMORROW, WeatherClient.CONDITION_RAIN, 8, NOW.toEpochMilli());
 

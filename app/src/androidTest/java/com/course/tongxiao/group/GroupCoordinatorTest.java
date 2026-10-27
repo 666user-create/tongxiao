@@ -132,16 +132,23 @@ public class GroupCoordinatorTest {
     // ---- CMD_MUTE ----
 
     @Test
-    public void mute_withPermission_mutesAcksOkAndSendsOpReceipt() {
+    public void mute_fromAPeer_targetingMyAlarm_isExecutedAndAcked() {
+        // The real topology (design.md §4/§7④): a roommate mutes MY ringing alarm.
+        // ownerDev is the alarm's owner = the executing side = this device; the
+        // sender is just the peer whose grantedMask is checked.
         enrolPeer();
 
-        command(GroupMessage.cmdMute(PEER, ALARM_UID));
+        command(GroupMessage.cmdMute(identity.deviceId(), ALARM_UID));
 
         assertEquals(1, gateway.muted.size());
         assertEquals(PEER + "/" + ALARM_UID, gateway.muted.get(0));
         GroupMessage ack = firstReplyOf(GroupMessage.Type.CMD_ACK);
         assertNotNull("an ACK is always sent", ack);
         assertTrue(ack.bool(GroupMessage.FIELD_OK, false));
+        assertTrue("the ACK must be taggable as a mute answer, otherwise the initiator "
+                        + "cannot tell it apart from a schedule-push ACK",
+                ack.string(GroupMessage.FIELD_WHAT, "")
+                        .startsWith(GroupCoordinator.ACK_WHAT_MUTE));
 
         GroupMessage receipt = firstReplyOf(GroupMessage.Type.NOTIFY_OP);
         assertNotNull("the sender's op-log needs a receipt", receipt);
@@ -149,11 +156,23 @@ public class GroupCoordinatorTest {
     }
 
     @Test
+    public void mute_whoseOwnerDevIsTheSender_isRejected() {
+        // Regression guard for the inverted owner check: a peer can never target its
+        // own alarm through me (ownerDev == sender means "mute your own alarm").
+        enrolPeer();
+
+        command(GroupMessage.cmdMute(PEER, ALARM_UID));
+
+        assertDenied(GroupProtocol.REASON_PERMISSION_DENIED);
+        assertTrue(gateway.muted.isEmpty());
+    }
+
+    @Test
     public void mute_withoutMutePermission_isDeniedAndNeverExecuted() {
         enrolPeer();
         setMask(0); // I revoke everything this member may do
 
-        command(GroupMessage.cmdMute(PEER, ALARM_UID));
+        command(GroupMessage.cmdMute(identity.deviceId(), ALARM_UID));
 
         assertDenied(GroupProtocol.REASON_PERMISSION_DENIED);
         assertTrue("the alarm must not be muted", gateway.muted.isEmpty());
@@ -164,7 +183,7 @@ public class GroupCoordinatorTest {
         enrolPeer();
         setMask(GroupMember.PERM_SEE | GroupMember.PERM_SET);
 
-        command(GroupMessage.cmdMute(PEER, ALARM_UID));
+        command(GroupMessage.cmdMute(identity.deviceId(), ALARM_UID));
 
         assertDenied(GroupProtocol.REASON_PERMISSION_DENIED);
         assertTrue(gateway.muted.isEmpty());
@@ -185,7 +204,7 @@ public class GroupCoordinatorTest {
         enrolPeer();
         settings.setGroupMasterSwitchOn(false);
 
-        command(GroupMessage.cmdMute(PEER, ALARM_UID));
+        command(GroupMessage.cmdMute(identity.deviceId(), ALARM_UID));
 
         assertDenied(GroupProtocol.REASON_MASTER_SWITCH_OFF);
         assertTrue(gateway.muted.isEmpty());
@@ -200,7 +219,7 @@ public class GroupCoordinatorTest {
         // Last heartbeat was 61s ago: the 60s freshness bound is broken.
         db.groupMemberDao().setOnline(PEER, true, System.currentTimeMillis() - 61_000L);
 
-        command(GroupMessage.cmdMute(PEER, ALARM_UID));
+        command(GroupMessage.cmdMute(identity.deviceId(), ALARM_UID));
 
         assertDenied(GroupProtocol.REASON_STALE_LINK);
         assertTrue(gateway.muted.isEmpty());
@@ -210,7 +229,7 @@ public class GroupCoordinatorTest {
     public void mute_withoutAlarmUid_isRejectedAsBadPayload() {
         enrolPeer();
 
-        command(GroupMessage.cmdMute(PEER, ""));
+        command(GroupMessage.cmdMute(identity.deviceId(), ""));
 
         assertDenied(GroupProtocol.REASON_BAD_PAYLOAD);
         assertTrue(gateway.muted.isEmpty());
@@ -221,7 +240,7 @@ public class GroupCoordinatorTest {
         enrolPeer();
         gateway.muteFailure = GroupProtocol.REASON_ALARM_NOT_FOUND;
 
-        command(GroupMessage.cmdMute(PEER, ALARM_UID));
+        command(GroupMessage.cmdMute(identity.deviceId(), ALARM_UID));
 
         assertDenied(GroupProtocol.REASON_ALARM_NOT_FOUND);
     }
@@ -537,6 +556,26 @@ public class GroupCoordinatorTest {
     }
 
     @Test
+    public void statsPush_usesTheLocalMemberNick_notThePayloadNick() {
+        enrolPeer(); // local member row is "小李"
+
+        // A member tries to appear as somebody else on the leaderboard.
+        JSONObject payload = statsPayload(445, 12, 3, System.currentTimeMillis());
+        try {
+            payload.put(GroupMessage.FIELD_NICK, "假名字");
+        } catch (JSONException e) {
+            throw new AssertionError(e);
+        }
+
+        command(GroupMessage.statsPush(payload));
+
+        List<PeerSnapshot> stored = peerStats.all();
+        assertEquals(1, stored.size());
+        assertEquals("the nickname must come from my member table", "小李",
+                stored.get(0).nick);
+    }
+
+    @Test
     public void statsPush_fromANonMember_isDropped() {
         GroupMessage push = GroupMessage.statsPush(statsPayload(445, 12, 3, System.currentTimeMillis()));
 
@@ -573,7 +612,7 @@ public class GroupCoordinatorTest {
         settings.setGroupMasterSwitchOn(false);
 
         GroupMessage[] commands = {
-                GroupMessage.cmdMute(PEER, ALARM_UID),
+                GroupMessage.cmdMute(identity.deviceId(), ALARM_UID),
                 GroupMessage.syncPush(alarms(alarm("uid-1", "早八", "06:40", true, false))),
                 GroupMessage.setRequest("req-blocked", "REMOVE_ALARM",
                         json("alarmUid", "uid-1"))

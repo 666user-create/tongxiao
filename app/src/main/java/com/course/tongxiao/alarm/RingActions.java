@@ -28,6 +28,9 @@ import java.time.format.DateTimeFormatter;
  */
 public class RingActions {
 
+    /** Two STOPPED events for the same ring closer than this are one stop. */
+    private static final long DUPLICATE_STOP_WINDOW_MS = 5_000L;
+
     private static final String TAG = "RingActions";
     private static final DateTimeFormatter ISO = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 
@@ -49,6 +52,14 @@ public class RingActions {
      */
     @WorkerThread
     public void onStopped(Alarm alarm, long fireAtMillis, String source) {
+        // The remote-mute path and the stop screen can both fire for the same ring
+        // (a roommate mutes while the owner is already tapping 停止). Recording twice
+        // would inflate the "被静音" leaderboard and pollute the adaptive samples, so
+        // a STOPPED event within a few seconds of the same fire is treated as the
+        // same stop.
+        if (alreadyStopped(alarm, fireAtMillis)) {
+            return;
+        }
         record(alarm, fireAtMillis, AlarmEvent.Type.STOPPED, source);
 
         if (alarm.repeatMode == Alarm.RepeatMode.ONCE) {
@@ -59,6 +70,25 @@ public class RingActions {
         } else {
             // setAlarmClock is one-shot; re-arm the next occurrence right away.
             scheduler.schedule(alarm);
+        }
+    }
+
+    /** @return true when this ring already has a STOPPED-family event (dedupe window). */
+    private boolean alreadyStopped(Alarm alarm, long fireAtMillis) {
+        try {
+            long since = Math.max(0L, fireAtMillis - DUPLICATE_STOP_WINDOW_MS);
+            for (AlarmEvent event : db.alarmEventDao().getRecent(alarm.id, since)) {
+                if (event.fireAt < since || event.fireAt > fireAtMillis + DUPLICATE_STOP_WINDOW_MS) {
+                    continue;
+                }
+                if (event.type == AlarmEvent.Type.STOPPED
+                        || event.type == AlarmEvent.Type.EMERGENCY_STOP) {
+                    return true;
+                }
+            }
+            return false;
+        } catch (RuntimeException e) {
+            return false; // dedupe is an optimisation: never lose the stop itself
         }
     }
 

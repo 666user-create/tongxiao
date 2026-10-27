@@ -1,13 +1,13 @@
 # 同晓 · 测试报告
 
 > 生成方式：本文件由用户在模拟器 `Pixel_7_API_36` 上实跑的 `gradlew connectedDebugAndroidTest` 结果与各里程碑关卡记录汇总。
-> 状态：**已完成**（最终全量运行：305 tests / 0 failed / 0 skipped，模拟器 Pixel_7_API_36）
+> 状态：**已完成**（最终全量运行：322 tests / 0 failed / 0 skipped，模拟器 Pixel_7_API_36）
 
 ## 1. 结论速览
 
 | 项目 | 结果 |
 |---|---|
-| 单元/集成测试（instrumentation） | **305 tests / 0 failed / 0 errors / 0 skipped** |
+| 单元/集成测试（instrumentation） | **322 tests / 0 failed / 0 errors / 0 skipped** |
 | 构建（G1，含 lint） | `BUILD SUCCESSFUL`，lint **0 error**，仅余 2 条已知提示 |
 | 手动验证（G5） | 保存落库、滚轮时间选择、响铃全链路、Provider 只读、双机互助（见 §4） |
 
@@ -79,6 +79,25 @@
 6. **Provider `Uri.getPath()` 带前导斜杠** → 拒绝自己的 URI：改用 `getPathSegments()`
 7. **`StatsFragment` 只在 onResume 加载** → 宿主 show/hide 时永远空白：改为 onViewCreated 先加载 + onHiddenChanged 刷新
 
+
+## 5.1 G4 独立评审（收尾轮）抓出并修复的问题
+
+评审代理（无上下文、只读代码）在本轮抓出 2 个 BLOCKER + 7 个 MAJOR，全部已修并补测试：
+
+| 级别 | 问题 | 后果 | 修复 |
+|---|---|---|---|
+| BLOCKER | `CMD_MUTE` 的 `ownerDev` 校验方向反了（要求 `sender == ownerDev`） | 真实的"舍友静音我的闹钟"100% 被拒，远程静音主线不可能成功 | 改为 `identity.deviceId().equals(ownerDev)`（目标必须是本机闹钟），发起方资格仍由权限位+心跳决定；补"跨设备合法静音必须 ACK ok"测试 |
+| BLOCKER | 宿舍页无静音入口、`broadcastSync()` 零调用 | 两台机器演示不出"B 点静音 → A 停声" | 成员行渲染共享时刻表 + "正在响"标识 + 静音按钮；握手成功/内容变化（5s 轮询指纹）/视图创建三处触发推送 |
+| MAJOR | 天气提前量在真机永不生效（`advanceEnabled` 从无写入点） | 功能是死代码，编辑页却宣称会提前 | 编辑页新增"天气不佳时提前响"开关并写入 `advanceEnabled/advanceMaxMin`；补 scheduler 接线测试（断言注册时刻早 10 分钟） |
+| MAJOR | 统计页在主线程读 SharedPreferences | 首屏 StrictMode 磁盘读 / ANR 风险 | 移到 worker，UI 只做渲染 |
+| MAJOR | 榜单窗口不一致（中位数按 7 天、计数按 14 天） | 榜单数字与文案不符 | `summarizeForPeers` 统一按窗口过滤；补"窗口外 SNOOZE 不计入"测试 |
+| MAJOR | 地名在线解析按叶子名取首条 → 同名区县解析到别省 | 用错城市天气决定是否提前 | 校验 country=CN 且**必须匹配省/市级段**（叶子名不足以区分"朝阳区/鼓楼区"）；缓存键改用完整路径；失败负缓存；补 5 条测试 |
+| MAJOR | 统计页广播只在打开时发一次 | "最近同步"只增不减，重连不自愈 | `onResume` 起 5 分钟 ticker，`onPause` 停 |
+| MAJOR | 跨零点提前会让接收端按前一天判星期 | 提前被吞并写假 `SKIPPED_HOLIDAY` | `advancedTriggerAt` 增加"提前后不得跨日"守卫 + 测试 |
+| MAJOR | `SettingsFragment` 后台线程 `requireContext()/getString()` + executor 不可复用 | 旋转/退出时可能崩溃 | 进 worker 前抓 appContext 与文案；executor 按需重建 |
+| MINOR | 远程静音与用户停铃重复记两条 STOPPED | 污染榜单向导与自适应样本 | `RingActions.onStopped` 5 秒去重窗口 + 测试 |
+| MINOR | 响铃瞬间 `currentRingingUid` 仍为 null | 该窗口内的静音被回 NOT_RINGING | `RingService` 增加同步可知的 `currentRingingAlarmId`，网关兜底匹配 |
+| MINOR | 区县轮自绑定监听、榜单文案写"平均"（实为中位数）、保存可双击、旧城市值静默落成北京 | 各种小偏差/重复插入 | 逐项修掉 |
 ## 6. 已知未覆盖项
 
 - 真实跨设备 NSD 发现（模拟器只覆盖了 127.0.0.1 回环；真机需同热点）

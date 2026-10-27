@@ -95,6 +95,11 @@ public class GroupManagerTest {
         GroupSession.detach(managerA);
         managerA.stop();
         managerB.stop();
+        // Let the reader threads finish in-flight callbacks before the DBs go away:
+        // closing a database under a live reader thread would surface as a test-only
+        // "connection is closed" crash (the app itself guards against it, but the
+        // teardown should not rely on that).
+        TestAwait.sleep(300L);
         dbA.close();
         dbB.close();
     }
@@ -120,9 +125,10 @@ public class GroupManagerTest {
     public void cmdMuteOverTheLink_isAckedOkAndExecuted() {
         handshake();
 
+        // B mutes A's alarm: ownerDev = A (the alarm's owner = the executing side).
         assertTrue("peer B has a live link to A",
                 managerB.send(identityA.deviceId(),
-                        GroupMessage.cmdMute(identityB.deviceId(), "uid-live")));
+                        GroupMessage.cmdMute(identityA.deviceId(), "uid-live")));
 
         TestAwait.until("A executed the mute", 5_000L, () -> !gatewayA.muted.isEmpty());
         assertEquals(identityB.deviceId() + "/uid-live", gatewayA.muted.get(0));
@@ -136,18 +142,42 @@ public class GroupManagerTest {
     }
 
     @Test
+    public void ringingAlarm_reachesThePeerMirror_thenTheRemoteMuteStopsIt() {
+        // The full demo path: A is ringing → SYNC_PUSH carries ringing → B sees it →
+        // B sends CMD_MUTE → A's alarm gateway is invoked and A acknowledges.
+        Alarm ringing = sharedAlarm();
+        dbA.alarmDao().insert(ringing);
+        gatewayA.ringingUid = ringing.uid;
+        handshake();
+
+        TestAwait.until("A pushed its schedule", 5_000L, () -> managerA.broadcastSync() >= 1);
+        TestAwait.until("B's mirror shows A's alarm ringing", 5_000L,
+                () -> !dbB.remoteAlarmDao().getRinging().isEmpty());
+        assertEquals(ringing.uid, dbB.remoteAlarmDao().getRinging().get(0).srcAlarmUid);
+
+        assertTrue("B can aim the command at A",
+                managerB.send(identityA.deviceId(),
+                        GroupMessage.cmdMute(identityA.deviceId(), ringing.uid)));
+
+        TestAwait.until("A's gateway was asked to mute", 5_000L,
+                () -> !gatewayA.muted.isEmpty());
+        assertEquals(identityB.deviceId() + "/" + ringing.uid, gatewayA.muted.get(0));
+        TestAwait.until("B got the ok ACK", 5_000L,
+                () -> findAckMute(inboundAtB, true) != null);
+    }
+
+    @Test
     public void cmdMuteWithoutPermission_overTheLink_isDeniedAndNotExecuted() {
         handshake();
         // A revokes everything B may do; the denial must happen on A.
         dbA.groupMemberDao().setGrantedMask(identityB.deviceId(), 0);
 
         assertTrue(managerB.send(identityA.deviceId(),
-                GroupMessage.cmdMute(identityB.deviceId(), "uid-live")));
+                GroupMessage.cmdMute(identityA.deviceId(), "uid-live")));
 
-        TestAwait.until("B received CMD_ACK ok=false PERMISSION_DENIED", 5_000L, () -> {
-            GroupMessage ack = findAck(inboundAtB);
+        TestAwait.until("B received a mute ACK denied with PERMISSION_DENIED", 5_000L, () -> {
+            GroupMessage ack = findAckMute(inboundAtB, false);
             return ack != null
-                    && !ack.bool(GroupMessage.FIELD_OK, true)
                     && GroupProtocol.REASON_PERMISSION_DENIED.equals(
                             ack.string(GroupMessage.FIELD_REASON, ""));
         });
@@ -285,6 +315,25 @@ public class GroupManagerTest {
         return null;
     }
 
+    /**
+     * Finds the ACK that answers a mute: it carries the {@code MUTE:} tag, so a
+     * schedule-push acknowledgement on the same link cannot be mistaken for it.
+     */
+    @Nullable
+    private static GroupMessage findAckMute(List<GroupMessage> inbox, boolean ok) {
+        synchronized (inbox) {
+            for (GroupMessage message : inbox) {
+                if (message.type() == GroupMessage.Type.CMD_ACK
+                        && message.bool(GroupMessage.FIELD_OK, false) == ok
+                        && message.string(GroupMessage.FIELD_WHAT, "")
+                        .startsWith("MUTE:")) {
+                    return message;
+                }
+            }
+        }
+        return null;
+    }
+
     @Nullable
     private static GroupMessage findNotify(List<GroupMessage> inbox) {
         synchronized (inbox) {
@@ -322,10 +371,12 @@ public class GroupManagerTest {
 
     private static final class FakeGateway implements AlarmGateway {
         final List<String> muted = Collections.synchronizedList(new ArrayList<>());
+        /** uid that {@link #isRinging(String)} reports as ringing (simulates RingService). */
+        volatile String ringingUid;
 
         @Override
         public boolean isRinging(@NonNull String alarmUid) {
-            return false;
+            return alarmUid.equals(ringingUid);
         }
 
         @Nullable

@@ -25,6 +25,8 @@
     <string name="edit_snooze_title">贪睡间隔（分钟）</string>
     <string name="edit_vibrate">响铃时振动</string>
     <string name="edit_challenge">停铃挑战（答对选择题才能停）</string>
+    <string name="edit_advance_weather">天气不佳时提前响</string>
+    <string name="edit_advance_weather_helper">需先在设置里选择地区；雨雪或 0℃ 以下时最多提前 20 分钟</string>
     <string name="edit_challenge_helper">默认关闭。开启后需答对 2 道选择题，长按 3 秒可紧急停止</string>
     <string name="edit_need_day">自定义星期至少选一天</string>
     <string name="edit_time_title">设置时间</string>
@@ -39,7 +41,7 @@
     <string name="next_ring_label">下次：%1$s</string>
     <string name="next_never">下次：无（检查重复设置）</string>
     <string name="smart_suggestion_accepted">已采纳建议，记得点保存</string>
-    <string name="smart_weather_hint">明天天气不佳，明早提前 %1$d 分钟响铃</string>
+    <string name="smart_weather_hint">下次响铃（%1$s）天气不佳，会提前 %2$d 分钟响铃</string>
 
     <string-array name="weekday_short">
         <item>周一</item>
@@ -72,6 +74,7 @@
     <string name="settings_region_none">未选择地区</string>
     <string name="settings_region_degraded">地区数据不可用，暂时无法选择地区</string>
     <string name="settings_region_saved">已选择：%1$s</string>
+    <string name="settings_region_reregister">旧的城市设置无法对应到新选择器，请重新选择地区</string>
     <string name="settings_city_clear">清除</string>
     <string name="settings_city_cleared">已清除城市，天气联动已关闭</string>
     <string name="settings_weather_on">当前城市：%1$s\n恶劣天气时闹钟会提前响（不用担心睡过头）</string>

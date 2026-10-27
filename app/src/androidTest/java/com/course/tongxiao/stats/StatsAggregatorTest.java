@@ -67,6 +67,37 @@ public class StatsAggregatorTest {
         }
     }
 
+    // ---- peer summary (dorm leaderboard): one window for every number ----
+
+    @Test
+    public void summarizeForPeers_countsSnoozeAndMutesInsideTheWindowOnly() {
+        List<AlarmEvent> events = new ArrayList<>();
+        events.add(stopped(TODAY.minusDays(1), 7, 10));                       // in window
+        events.add(event(AlarmEvent.Type.SNOOZE, 1, TODAY.minusDays(2), 7, 20,
+                "snooze:10"));                                                 // in window
+        events.add(event(AlarmEvent.Type.SNOOZE, 1, TODAY.minusDays(11), 7, 20,
+                "snooze:10"));                                                 // OUTSIDE 7 days
+        events.add(event(AlarmEvent.Type.STOPPED, 1, TODAY.minusDays(12), 7, 30,
+                "{\"source\":\"remote:peer\"}"));                              // OUTSIDE 7 days
+        events.add(event(AlarmEvent.Type.STOPPED, 1, TODAY.minusDays(3), 7, 30,
+                "{\"source\":\"remote:peer\"}"));                              // in window
+
+        StatsAggregator.PeerSummary week = StatsAggregator.summarizeForPeers(events, TODAY, 7);
+
+        assertEquals("two wake-ups in the week window", 2, week.days);
+        assertEquals("only the in-window snooze counts", 1, week.snoozeCount);
+        assertEquals("only the in-window remote mute counts", 1, week.mutedCount);
+    }
+
+    @Test
+    public void summarizeForPeers_withoutData_reportsNoWakeUp() {
+        StatsAggregator.PeerSummary empty =
+                StatsAggregator.summarizeForPeers(Collections.emptyList(), TODAY, 7);
+        assertEquals(0, empty.days);
+        assertEquals(0, empty.medianStopMinuteOfDay);
+        assertEquals(0, empty.snoozeCount);
+        assertEquals(0, empty.mutedCount);
+    }
     @Test
     public void trend_keepsEarliestStopOfEachDay_andSkipsDaysWithoutData() {
         List<AlarmEvent> events = new ArrayList<>();

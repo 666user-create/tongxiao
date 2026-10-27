@@ -25,7 +25,7 @@
     <string name="stats_leaderboard_hint">暂无舍友数据 · 连上同一 Wi-Fi 后会自动同步</string>
     <string name="stats_leaderboard_status">%1$d 位舍友 · 最近同步 %2$s</string>
     <string name="stats_leaderboard_status_stale">%1$d 位舍友 · 最近同步 %2$s（%3$d 位离线较久）</string>
-    <string name="stats_leaderboard_row">%1$s · 平均 %2$s</string>
+    <string name="stats_leaderboard_row">%1$s · 通常 %2$s 起</string>
     <string name="stats_leaderboard_row_detail">贪睡 %1$d 次 · 被静音 %2$d 次 · %3$s</string>
     <string name="stats_leaderboard_me">我</string>
     <string name="stats_leaderboard_no_wake">暂无记录</string>

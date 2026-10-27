@@ -197,7 +197,23 @@ public final class GroupMessage {
     /** @param reason null when {@code ok}, otherwise a {@link GroupProtocol} reason code. */
     @NonNull
     public static GroupMessage cmdAck(boolean ok, @Nullable String reason) {
-        return build(Type.CMD_ACK, FIELD_OK, ok, FIELD_REASON, reason == null ? "" : reason);
+        return cmdAck(ok, reason, null);
+    }
+
+    /**
+     * ACK with a correlation tag in {@link #FIELD_WHAT}, e.g. {@code "MUTE:<uid>"}.
+     *
+     * <p>design.md §4 defines CMD_ACK as {@code ok, reason} only, but the sender of a
+     * command must be able to tell "the alarm is muted" apart from "your schedule
+     * push arrived" when both answers come back on the same link. The extra field is
+     * additive: an older build ignores unknown fields, and an ACK without a tag is
+     * still understood as a plain result.
+     */
+    @NonNull
+    public static GroupMessage cmdAck(boolean ok, @Nullable String reason,
+                                      @Nullable String what) {
+        return build(Type.CMD_ACK, FIELD_OK, ok, FIELD_REASON, reason == null ? "" : reason,
+                FIELD_WHAT, what == null ? "" : what);
     }
 
     @NonNull

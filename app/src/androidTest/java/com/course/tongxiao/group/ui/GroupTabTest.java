@@ -2,6 +2,7 @@ package com.course.tongxiao.group.ui;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import android.content.Context;
@@ -18,8 +19,11 @@ import com.course.tongxiao.R;
 import com.course.tongxiao.group.GroupCleanup;
 import com.course.tongxiao.group.GroupIdentity;
 import com.course.tongxiao.group.PeerStatsStore;
+import com.course.tongxiao.group.TestAwait;
 import com.course.tongxiao.group.protocol.GroupProtocol;
 import com.course.tongxiao.data.TongxiaoDb;
+import com.course.tongxiao.data.entity.GroupMember;
+import com.course.tongxiao.data.entity.RemoteAlarm;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 
 import org.junit.After;
@@ -129,5 +133,103 @@ public class GroupTabTest {
             assertEquals("my nickname is shown next to the code",
                     "我：" + identity.nick(), nickText.getText().toString());
         }
+    }
+
+    @Test
+    public void ringingSharedAlarm_showsRingingBadgeAndMuteButton() throws Exception {
+        // G4/B2 regression: the demo needs a visible mute entry. Seed the state the
+        // peer would have pushed (member + mirror row with ringingNow), then assert
+        // the page renders both the badge and the button.
+        String peerId = "peer-ringing-device";
+        identity.setGroupCode("445566");
+        seedMember(peerId, "小李");
+        seedMirror(peerId, "uid-ringing", "06:40", true);
+
+        try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
+            openGroupTab(scenario);
+
+            assertNotNull("the member row appears", awaitView(scenario, R.id.group_member_list, View.class));
+            TestAwait.until("the mute button is rendered", 5_000L,
+                    () -> findViewWithText(scenario, text(R.string.group_mute)) != null);
+            assertNotNull("the ringing badge is rendered",
+                    findViewWithText(scenario, text(R.string.group_member_ringing)));
+            assertNotNull("the shared alarm time is rendered",
+                    findViewWithText(scenario, "06:40"));
+        }
+    }
+
+    @Test
+    public void sharedAlarmNotRinging_hasNoMuteButton() throws Exception {
+        String peerId = "peer-quiet-device";
+        identity.setGroupCode("445566");
+        seedMember(peerId, "小王");
+        seedMirror(peerId, "uid-quiet", "07:10", false);
+
+        try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
+            openGroupTab(scenario);
+            assertNotNull(awaitView(scenario, R.id.group_member_list, View.class));
+
+            TestAwait.until("the mirrored time is rendered", 5_000L,
+                    () -> findViewWithText(scenario, "07:10") != null);
+            assertNull("mute must only be offered for a ringing alarm",
+                    findViewWithText(scenario, text(R.string.group_mute)));
+        }
+    }
+
+    private static View findViewWithText(ActivityScenario<MainActivity> scenario, String text) {
+        final View[] found = {null};
+        scenario.onActivity(activity -> {
+            View root = activity.findViewById(R.id.group_member_list);
+            found[0] = root == null ? null : findByText(root, text);
+        });
+        return found[0];
+    }
+
+    private static View findByText(View view, String text) {
+        if (view instanceof TextView
+                && text.contentEquals(((TextView) view).getText())) {
+            return view;
+        }
+        if (view instanceof android.view.ViewGroup) {
+            android.view.ViewGroup group = (android.view.ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) {
+                View hit = findByText(group.getChildAt(i), text);
+                if (hit != null) {
+                    return hit;
+                }
+            }
+        }
+        return null;
+    }
+
+    private void seedMember(String deviceId, String nick) {
+        GroupMember member = new GroupMember();
+        member.deviceId = deviceId;
+        member.nick = nick;
+        member.groupKey = "445566";
+        member.grantedMask = GroupMember.PERM_MUTE | GroupMember.PERM_SEE;
+        member.online = true;
+        member.joinAt = System.currentTimeMillis();
+        testDb().groupMemberDao().upsert(member);
+    }
+
+    private void seedMirror(String owner, String uid, String timeText, boolean ringing) {
+        RemoteAlarm row = new RemoteAlarm();
+        row.ownerDeviceId = owner;
+        row.srcAlarmUid = uid;
+        row.alarmLabel = "早八";
+        row.timeText = timeText;
+        row.repeatText = "智能工作日";
+        row.enabled = true;
+        row.ringingNow = ringing;
+        testDb().remoteAlarmDao().upsertAll(java.util.Collections.singletonList(row));
+    }
+
+    private TongxiaoDb testDb() {
+        return TongxiaoDb.get(ctx);
+    }
+
+    private String text(int stringRes) {
+        return ctx.getString(stringRes);
     }
 }

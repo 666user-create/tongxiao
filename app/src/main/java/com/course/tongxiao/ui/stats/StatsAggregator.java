@@ -224,14 +224,24 @@ public final class StatsAggregator {
                     : (minutes.get(middle - 1) + minutes.get(middle)) / 2;
         }
 
+        // Counters use the SAME window as the median: a caller that passes a wider
+        // event list (the 14-day trend query) must not inflate the week's snooze and
+        // mute numbers — that mismatch made the leaderboard disagree with its copy.
+        long fromMillis = from.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
         int snooze = 0;
+        int muted = 0;
         if (events != null) {
             for (AlarmEvent event : events) {
-                if (event != null && event.type == AlarmEvent.Type.SNOOZE) {
+                if (event == null || event.fireAt < fromMillis) {
+                    continue;
+                }
+                if (event.type == AlarmEvent.Type.SNOOZE) {
                     snooze++;
+                } else if (event.type == AlarmEvent.Type.STOPPED && isRemoteMute(event.meta)) {
+                    muted++;
                 }
             }
         }
-        return new PeerSummary(minutes.size(), median, snooze, stats.remoteMutedCount);
+        return new PeerSummary(minutes.size(), median, snooze, muted);
     }
 }

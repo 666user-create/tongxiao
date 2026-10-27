@@ -61,6 +61,19 @@ public class StatsFragment extends Fragment {
     /** Broadcasts at most every 5 minutes: snapshots are best-effort, not chatty. */
     private long lastBroadcastAt;
 
+    private final android.os.Handler ticker =
+            new android.os.Handler(android.os.Looper.getMainLooper());
+    private final Runnable tick = new Runnable() {
+        @Override
+        public void run() {
+            if (!isAdded()) {
+                return;
+            }
+            load();
+            ticker.postDelayed(this, LEADERBOARD_BROADCAST_INTERVAL_MS);
+        }
+    };
+
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container,
@@ -93,6 +106,16 @@ public class StatsFragment extends Fragment {
     public void onResume() {
         super.onResume();
         load();
+        // Keep the leaderboard fresh while this screen is actually visible: without
+        // the ticker the snapshot went out once and "synced N minutes ago" only grew.
+        ticker.removeCallbacks(tick);
+        ticker.postDelayed(tick, LEADERBOARD_BROADCAST_INTERVAL_MS);
+    }
+
+    @Override
+    public void onPause() {
+        ticker.removeCallbacks(tick);
+        super.onPause();
     }
 
     /**
@@ -124,10 +147,24 @@ public class StatsFragment extends Fragment {
         worker.execute(() -> {
             try {
                 TongxiaoDb db = TongxiaoDb.get(appContext);
+                // The leaderboard ranks the last 7 days, so it queries its own window
+                // instead of reusing the 14-day trend window (mixing them made the
+                // snooze/mute counters silently wider than the median).
                 long since = today.minusDays(StatsAggregator.TREND_DAYS - 1L)
                         .atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
+                long leaderboardSince = today.minusDays(LEADERBOARD_WINDOW_DAYS - 1L)
+                        .atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
                 List<AlarmEvent> events = db.alarmEventDao().getSince(since);
+                List<AlarmEvent> leaderboardEvents = leaderboardSince == since
+                        ? events : db.alarmEventDao().getSince(leaderboardSince);
                 StatsAggregator.Stats stats = StatsAggregator.aggregate(events, today);
+                StatsAggregator.PeerSummary mine =
+                        StatsAggregator.summarizeForPeers(leaderboardEvents, today,
+                                LEADERBOARD_WINDOW_DAYS);
+                // Prefs read stays on the worker: getAll() can hit disk the first
+                // time and this is the only place that touches PeerStatsStore.
+                List<com.course.tongxiao.group.PeerSnapshot> peers =
+                        new com.course.tongxiao.group.PeerStatsStore(appContext).all();
 
                 Map<Integer, String> labels = new HashMap<>();
                 for (Alarm alarm : db.alarmDao().getAll()) {
@@ -137,16 +174,16 @@ public class StatsFragment extends Fragment {
                 activity.runOnUiThread(() -> {
                     if (isAdded() && getView() != null) {
                         render(stats, labels, today);
-                        renderLeaderboard(appContext, events, today);
+                        renderLeaderboard(mine, peers);
                     }
                 });
 
-                // Offline-first leaderboard: publish our own summary when we have a
-                // session and the data is old enough. No session (not in a group, or
-                // the dorm tab is not open) makes this a silent no-op by design.
+                // Offline-first leaderboard: publish our own summary when a session
+                // exists and the last broadcast is old enough. No session (not in a
+                // group, or the dorm tab is not open) makes this a silent no-op.
                 if (System.currentTimeMillis() - lastBroadcastAt
                         > LEADERBOARD_BROADCAST_INTERVAL_MS) {
-                    broadcastOwnSnapshot(events, today);
+                    broadcastSnapshot(mine);
                     lastBroadcastAt = System.currentTimeMillis();
                 }
             } catch (RuntimeException e) {
@@ -187,19 +224,15 @@ public class StatsFragment extends Fragment {
      * than 24h is greyed out but never hidden: dropping Wi-Fi costs freshness, it
      * must not make the leaderboard disappear.
      */
-    private void renderLeaderboard(android.content.Context appContext,
-                                   List<AlarmEvent> events, LocalDate today) {
+    private void renderLeaderboard(StatsAggregator.PeerSummary mine,
+                                   List<com.course.tongxiao.group.PeerSnapshot> peers) {
         if (leaderboardRows == null || !isAdded()) {
             return;
         }
-        List<com.course.tongxiao.group.PeerSnapshot> peers =
-                new com.course.tongxiao.group.PeerStatsStore(appContext).all();
         leaderboardRows.removeAllViews();
 
-        StatsAggregator.PeerSummary mine =
-                StatsAggregator.summarizeForPeers(events, today, LEADERBOARD_WINDOW_DAYS);
         addLeaderboardRow(getString(R.string.stats_leaderboard_me),
-                mine.medianStopMinuteOfDay == 0 && mine.days == 0
+                mine.days == 0
                         ? getString(R.string.stats_leaderboard_no_wake)
                         : formatClock(mine.medianStopMinuteOfDay),
                 getString(R.string.stats_leaderboard_row_detail,
@@ -260,10 +293,8 @@ public class StatsFragment extends Fragment {
     }
 
     /** Publishes our own summary (deviceId/nick/sentAt are filled in by the manager). */
-    private void broadcastOwnSnapshot(List<AlarmEvent> events, LocalDate today) {
+    private void broadcastSnapshot(StatsAggregator.PeerSummary mine) {
         try {
-            StatsAggregator.PeerSummary mine =
-                    StatsAggregator.summarizeForPeers(events, today, LEADERBOARD_WINDOW_DAYS);
             org.json.JSONObject payload = new org.json.JSONObject();
             payload.put("days", mine.days);
             payload.put("medianStopMinute",
@@ -276,8 +307,21 @@ public class StatsFragment extends Fragment {
         }
     }
 
+    /**
+     * A session alone is not enough: the dorm tab attaches its manager even before a
+     * group exists, so relying on it alone would print "waiting for roommates"
+     * instead of "join a group first".
+     */
     private boolean hasGroupSession() {
-        return com.course.tongxiao.group.GroupSession.currentOrNull() != null;
+        if (com.course.tongxiao.group.GroupSession.currentOrNull() == null) {
+            return false;
+        }
+        try {
+            String code = new com.course.tongxiao.group.GroupIdentity(requireContext()).groupCode();
+            return code != null && !code.trim().isEmpty();
+        } catch (RuntimeException e) {
+            return false;
+        }
     }
 
     private String formatClock(int minuteOfDay) {
@@ -305,6 +349,7 @@ public class StatsFragment extends Fragment {
 
     @Override
     public void onDestroyView() {
+        ticker.removeCallbacks(tick);
         if (worker != null) {
             worker.shutdown();
             worker = null;

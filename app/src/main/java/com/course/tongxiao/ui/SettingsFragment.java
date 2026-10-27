@@ -1,5 +1,6 @@
 package com.course.tongxiao.ui;
 
+import android.app.Activity;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
@@ -35,7 +36,8 @@ import java.util.concurrent.Executors;
  */
 public class SettingsFragment extends Fragment {
 
-    private final ExecutorService worker = Executors.newSingleThreadExecutor();
+    /** Recreatable: a config change destroys the view but keeps the fragment. */
+    private ExecutorService worker = Executors.newSingleThreadExecutor();
 
     private SettingsStore settings;
     private TextView holidayStatus;
@@ -58,7 +60,17 @@ public class SettingsFragment extends Fragment {
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
-        settings = new SettingsStore(requireContext());
+        // Capture everything the background work needs BEFORE leaving the UI thread:
+        // a detached fragment throws on requireContext(), and getString() off the
+        // main thread risks a race with view destruction. See AlarmsFragment's
+        // pattern for the same reason.
+        final android.content.Context appContext = requireContext().getApplicationContext();
+        final String textDegraded = getString(R.string.settings_holiday_degraded);
+        final String textOkFormat = getString(R.string.settings_holiday_ok);
+        final String textMissingFormat = getString(R.string.settings_holiday_missing);
+        final int year = java.time.LocalDate.now().getYear();
+
+        settings = new SettingsStore(appContext);
         holidayStatus = view.findViewById(R.id.settings_holiday_status);
         weatherStatus = view.findViewById(R.id.weather_status);
         regionValue = view.findViewById(R.id.settings_region_value);
@@ -67,34 +79,57 @@ public class SettingsFragment extends Fragment {
         masterSwitch = view.findViewById(R.id.settings_group_master);
 
         masterSwitch.setChecked(settings.isGroupMasterSwitchOn());
-        masterSwitch.setOnCheckedChangeListener((button, checked) ->
-                worker.execute(() -> settings.setGroupMasterSwitchOn(checked)));
+        masterSwitch.setOnCheckedChangeListener((button, checked) -> submit(
+                () -> settings.setGroupMasterSwitchOn(checked)));
 
         renderRegion();
         regionPick.setOnClickListener(v -> openRegionPicker());
         view.findViewById(R.id.settings_region_clear).setOnClickListener(v -> clearRegion());
 
-        worker.execute(() -> {
-            RegionCatalog loaded = RegionCatalog.fromAssets(requireContext().getApplicationContext());
-            HolidayCalendar calendar = HolidayCalendar.loadFromAssets(
-                    requireContext().getApplicationContext());
-            int year = java.time.LocalDate.now().getYear();
+        submit(() -> {
+            RegionCatalog loaded = RegionCatalog.fromAssets(appContext);
+            HolidayCalendar calendar = HolidayCalendar.loadFromAssets(appContext);
             String holidayText;
             if (calendar.isDegraded()) {
-                holidayText = getString(R.string.settings_holiday_degraded);
+                holidayText = textDegraded;
             } else if (calendar.hasDataFor(year)) {
-                holidayText = getString(R.string.settings_holiday_ok, calendar.holidayCount());
+                holidayText = String.format(textOkFormat, calendar.holidayCount());
             } else {
-                holidayText = getString(R.string.settings_holiday_missing, year);
+                holidayText = String.format(textMissingFormat, year);
             }
-            if (getActivity() != null) {
-                getActivity().runOnUiThread(() -> {
-                    catalog = loaded;
-                    holidayStatus.setText(holidayText);
-                    applyCatalogState();
-                });
-            }
+            final String finalText = holidayText;
+            runOnUiIfAttached(() -> {
+                catalog = loaded;
+                holidayStatus.setText(finalText);
+                applyCatalogState();
+            });
         });
+    }
+
+    /**
+     * Runs {@code task} on the worker, recreating the executor when a previous view
+     * destroyed it (a fragment instance outlives its view across config changes).
+     */
+    private void submit(@NonNull Runnable task) {
+        if (worker.isShutdown()) {
+            worker = Executors.newSingleThreadExecutor();
+        }
+        worker.execute(task);
+    }
+
+    /** Posts to the activity only when the fragment still has a view attached. */
+    private void runOnUiIfAttached(@NonNull Runnable action) {
+        if (!isAdded()) {
+            return;
+        }
+        Activity activity = getActivity();
+        if (activity != null) {
+            activity.runOnUiThread(() -> {
+                if (isAdded() && getView() != null) {
+                    action.run();
+                }
+            });
+        }
     }
 
     private void applyCatalogState() {
@@ -110,7 +145,20 @@ public class SettingsFragment extends Fragment {
                     Snackbar.LENGTH_SHORT).show();
             return;
         }
-        RegionPickerDialog.show(requireContext(), catalog, settings.getCity(), picked -> {
+        // A value saved by an older build (free text "杭州", no 市 suffix) cannot be
+        // mapped onto the wheels. Preselecting the first province would silently
+        // rewrite it to 北京 on the next 确定, so start from scratch and say why.
+        String current = settings.getCity();
+        String preselect = current;
+        if (!TextUtils.isEmpty(current)) {
+            String first = current.trim().split("\\s+")[0];
+            if (!catalog.provinces().contains(first)) {
+                preselect = null;
+                Snackbar.make(requireView(), R.string.settings_region_reregister,
+                        Snackbar.LENGTH_LONG).show();
+            }
+        }
+        RegionPickerDialog.show(requireContext(), catalog, preselect, picked -> {
             settings.setCity(picked);
             renderRegion();
             Snackbar.make(requireView(), getString(R.string.settings_region_saved, picked),
@@ -138,10 +186,10 @@ public class SettingsFragment extends Fragment {
 
     /** Pulls the forecast right away so the first alarm already benefits from it. */
     private void refreshForecast(String region) {
-        worker.execute(() -> {
+        final android.content.Context appContext = requireContext().getApplicationContext();
+        submit(() -> {
             try {
-                new WeatherClient(TongxiaoDb.get(requireContext()).weatherCacheDao())
-                        .refresh(region);
+                new WeatherClient(TongxiaoDb.get(appContext).weatherCacheDao()).refresh(region);
             } catch (RuntimeException ignored) {
                 // offline is fine: no cache means no advance, never a wrong advance
             }

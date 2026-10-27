@@ -1,7 +1,10 @@
 package com.course.tongxiao.group.ui;
 
 import android.content.Context;
+import android.graphics.Typeface;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.LayoutInflater;
@@ -22,8 +25,10 @@ import com.course.tongxiao.data.SettingsStore;
 import com.course.tongxiao.data.TongxiaoDb;
 import com.course.tongxiao.data.entity.GroupMember;
 import com.course.tongxiao.data.entity.PendingRequest;
+import com.course.tongxiao.data.entity.RemoteAlarm;
 import com.course.tongxiao.group.AlarmGateway;
 import com.course.tongxiao.group.GroupCleanup;
+import com.course.tongxiao.group.GroupCoordinator;
 import com.course.tongxiao.group.GroupIdentity;
 import com.course.tongxiao.group.GroupManager;
 import com.course.tongxiao.group.GroupSession;
@@ -38,10 +43,14 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.security.SecureRandom;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
@@ -50,14 +59,18 @@ import java.util.concurrent.RejectedExecutionException;
  * Dorm-group page (design.md §7 ④ / §5.5).
  *
  * <p>Two states only: "not in a group" (create or join with a 6-digit code) and
- * "in a group" (code + my nick, member list with permission chips, and the
- * confirmation queue for incoming setting requests).
+ * "in a group" (code + my nick, member list with permission chips, each peer's
+ * shared alarms with the one no-confirmation action "静音", and the confirmation
+ * queue for incoming setting requests).
  *
- * <p><b>Lifetime limit (documented, accepted for v1):</b> the fragment itself owns
- * the {@link GroupManager} plus {@link NsdDiscovery} — they start in
- * {@link #onStart()} and stop in {@link #onStop()}. So a member is only
- * discoverable/mutable while this page is in the foreground. A background service
- * would be the "always reachable" version; the course scope keeps it visible.
+ * <p><b>Session lifetime:</b> the fragment owns the {@link GroupManager} plus
+ * {@link NsdDiscovery}; they start when the view is created and stop when the view
+ * is destroyed. Deliberately <em>not</em> tied to onStart/onStop: when my alarm
+ * rings, the full-screen stop page covers MainActivity, and a link torn down at
+ * that moment would break exactly the scenario the feature exists for (a roommate
+ * muting my ringing alarm). design.md §4 also describes the holder as
+ * "本机后台常驻", so the connection outlives the visible page; it ends with the view
+ * or the process, which keeps the course scope honest (no extra Service).
  *
  * <p>Rows are built in code instead of a RecyclerView adapter: the lists are at most
  * a few dorm members, and this keeps the whole page in one readable file (no new
@@ -71,6 +84,13 @@ public class GroupFragment extends Fragment {
     private static final String KEY_HOUR = "hour";
     private static final String KEY_MINUTE = "minute";
 
+    /** How many of a peer's shared alarms the member row lists. */
+    private static final int MAX_MIRRORED_ALARMS = 5;
+    /** Change-detection period for "my schedule / ringing state changed" pushes. */
+    private static final long SYNC_POLL_MS = 5_000L;
+    /** CMD_ACK carries no correlation id, so only a fresh request may claim it. */
+    private static final long MUTE_ACK_WINDOW_MS = 10_000L;
+
     private GroupIdentity identity;
     private TongxiaoDb db;
     private GroupManager manager;
@@ -79,6 +99,22 @@ public class GroupFragment extends Fragment {
     private ExecutorService io;
 
     private final Map<String, String> nickByDevice = new HashMap<>();
+    /** deviceId → the peer's schedule as last pushed to me (RemoteAlarmDao mirror). */
+    private final Map<String, List<RemoteAlarm>> mirrorsByOwner = new HashMap<>();
+    private final Set<String> observedOwners = new HashSet<>();
+    private List<GroupMember> lastMembers = Collections.emptyList();
+
+    private final Handler syncHandler = new Handler(Looper.getMainLooper());
+    private final Runnable syncTick = new Runnable() {
+        @Override
+        public void run() {
+            pushScheduleIfChanged();
+            syncHandler.postDelayed(this, SYNC_POLL_MS);
+        }
+    };
+    private volatile String lastSyncFingerprint;
+    private volatile String pendingMuteOwner;
+    private volatile long pendingMuteAt;
 
     private LinearLayout joinCard;
     private LinearLayout panel;
@@ -142,22 +178,29 @@ public class GroupFragment extends Fragment {
         db.pendingRequestDao().observeByStatus(PendingRequest.Status.PENDING)
                 .observe(getViewLifecycleOwner(), this::renderPending);
 
+        // Remote-command feedback (CMD_ACK) for the mute button.
+        manager.setObserver(this::onPeerMessage);
+
         renderGroupState();
 
         // design.md §3.1: overdue confirmations are voided before the list is trusted.
         submitIo(() -> manager.coordinator().expireOverdue());
-    }
 
-    @Override
-    public void onStart() {
-        super.onStart();
+        // The session lives with the view, not with onStart/onStop: when my alarm
+        // starts ringing, the full-screen stop page covers MainActivity and would
+        // stop the link exactly when a roommate needs it to mute me. design.md §4
+        // even calls the holder "本机后台常驻", so the link outlives the visible page
+        // and only ends with the view/process.
         startServices();
+        syncHandler.removeCallbacks(syncTick);
+        syncHandler.post(syncTick);
     }
 
     @Override
-    public void onStop() {
+    public void onDestroyView() {
+        syncHandler.removeCallbacks(syncTick);
         stopServices();
-        super.onStop();
+        super.onDestroyView();
     }
 
     @Override
@@ -239,6 +282,94 @@ public class GroupFragment extends Fragment {
         submitIo(manager::stop);
     }
 
+    /**
+     * Pushes my schedule when anything in it changed — in particular when an alarm
+     * starts or stops ringing, which is what makes the peer's 静音 button appear.
+     *
+     * <p>Why a comparison instead of a listener: the ringing flag is read live from
+     * the ring service by {@code buildSyncPush()}, and the group package must not
+     * hook into the service's internals. Polling the built message is the smallest
+     * reliable trigger, and it only sends when the content actually differs.
+     */
+    private void pushScheduleIfChanged() {
+        if (identity == null || identity.groupCode().isEmpty()) {
+            return;
+        }
+        submitIo(() -> {
+            if (identity.groupCode().isEmpty()) {
+                return;
+            }
+            String fingerprint;
+            try {
+                fingerprint = manager.coordinator().buildSyncPush().toJson();
+            } catch (RuntimeException broken) {
+                Log.w(TAG, "cannot build the schedule push", broken);
+                return;
+            }
+            if (fingerprint.equals(lastSyncFingerprint)) {
+                return; // nothing changed: stay quiet
+            }
+            lastSyncFingerprint = fingerprint;
+            manager.broadcastSync();
+        });
+    }
+
+    /**
+     * Inbound feedback for outgoing commands.
+     *
+     * <p>{@code CMD_ACK} has no request id (design.md §4), so mute answers are
+     * correlated by the {@code what} tag ("MUTE:<uid>"). An untagged ACK is never
+     * treated as a success — it is most likely a schedule-push acknowledgement — but
+     * a failure is still surfaced when a mute is in flight, so a denial is not lost
+     * when talking to a peer build without tags.
+     */
+    private void onPeerMessage(@NonNull String deviceId, @NonNull GroupMessage message) {
+        if (message.type() != GroupMessage.Type.CMD_ACK) {
+            return;
+        }
+        String owner = pendingMuteOwner;
+        if (owner == null || !owner.equals(deviceId)) {
+            return;
+        }
+        boolean fresh = System.currentTimeMillis() - pendingMuteAt <= MUTE_ACK_WINDOW_MS;
+        String what = message.string(GroupMessage.FIELD_WHAT, "");
+        boolean taggedMuteAck = what.startsWith(GroupCoordinator.ACK_WHAT_MUTE);
+        boolean ok = message.bool(GroupMessage.FIELD_OK, false);
+        if (!taggedMuteAck && ok) {
+            return; // e.g. "your schedule arrived" — not an answer to the mute
+        }
+        if (!fresh) {
+            pendingMuteOwner = null;
+            return;
+        }
+        pendingMuteOwner = null;
+        if (ok) {
+            toast(R.string.group_mute_ok);
+            return;
+        }
+        toastText(muteFailureText(message.string(GroupMessage.FIELD_REASON, "")));
+    }
+
+    @NonNull
+    private String muteFailureText(@NonNull String reason) {
+        if (GroupProtocol.REASON_PERMISSION_DENIED.equals(reason)) {
+            return getString(R.string.group_mute_denied);
+        }
+        if (GroupProtocol.REASON_MASTER_SWITCH_OFF.equals(reason)) {
+            return getString(R.string.group_mute_blocked);
+        }
+        if (GroupProtocol.REASON_ALARM_NOT_FOUND.equals(reason)) {
+            return getString(R.string.group_mute_not_found);
+        }
+        if (GroupProtocol.REASON_NOT_RINGING.equals(reason)) {
+            return getString(R.string.group_mute_not_ringing);
+        }
+        if (GroupProtocol.REASON_STALE_LINK.equals(reason)) {
+            return getString(R.string.group_mute_stale);
+        }
+        return getString(R.string.group_mute_failed, reason);
+    }
+
     // ---- rendering ----
 
     private void renderGroupState() {
@@ -260,14 +391,38 @@ public class GroupFragment extends Fragment {
         if (memberList == null) {
             return;
         }
-        memberList.removeAllViews();
-        nickByDevice.clear();
-        boolean empty = members == null || members.isEmpty();
-        memberEmpty.setVisibility(empty ? View.VISIBLE : View.GONE);
-        if (empty) {
+        lastMembers = members == null ? Collections.emptyList() : new ArrayList<>(members);
+        observeMirrors(lastMembers);
+        renderMemberRows();
+    }
+
+    /**
+     * One LiveData per member: the schedule that peer pushed to me. Observers are
+     * added once per device and live with the view, so a member coming back does not
+     * stack duplicates.
+     */
+    private void observeMirrors(@NonNull List<GroupMember> members) {
+        for (GroupMember member : members) {
+            if (!observedOwners.add(member.deviceId)) {
+                continue;
+            }
+            db.remoteAlarmDao().observeOwner(member.deviceId)
+                    .observe(getViewLifecycleOwner(), rows -> {
+                        mirrorsByOwner.put(member.deviceId,
+                                rows == null ? Collections.emptyList() : rows);
+                        renderMemberRows();
+                    });
+        }
+    }
+
+    private void renderMemberRows() {
+        if (memberList == null) {
             return;
         }
-        for (GroupMember member : members) {
+        memberList.removeAllViews();
+        nickByDevice.clear();
+        memberEmpty.setVisibility(lastMembers.isEmpty() ? View.VISIBLE : View.GONE);
+        for (GroupMember member : lastMembers) {
             nickByDevice.put(member.deviceId, member.nick);
             memberList.addView(buildMemberRow(member));
         }
@@ -331,7 +486,91 @@ public class GroupFragment extends Fragment {
         LinearLayout.LayoutParams chipRowParams = wrapParams();
         chipRowParams.topMargin = dp(4);
         row.addView(chips, chipRowParams);
+
+        List<RemoteAlarm> shared = mirrorsByOwner.get(member.deviceId);
+        if (shared != null && !shared.isEmpty()) {
+            row.addView(buildSharedSchedule(member, shared));
+        }
         return row;
+    }
+
+    /** The peer's shared schedule, plus the one no-confirmation action: mute. */
+    private View buildSharedSchedule(@NonNull GroupMember member,
+                                     @NonNull List<RemoteAlarm> shared) {
+        Context context = requireContext();
+        LinearLayout block = new LinearLayout(context);
+        block.setOrientation(LinearLayout.VERTICAL);
+
+        int shown = 0;
+        for (RemoteAlarm alarm : shared) {
+            if (shown++ >= MAX_MIRRORED_ALARMS) {
+                break;
+            }
+            block.addView(buildMirrorRow(member, alarm, context));
+        }
+        LinearLayout.LayoutParams blockParams = wrapParams();
+        blockParams.topMargin = dp(6);
+        block.setLayoutParams(blockParams);
+        return block;
+    }
+
+    private View buildMirrorRow(@NonNull GroupMember member, @NonNull RemoteAlarm alarm,
+                                @NonNull Context context) {
+        LinearLayout line = new LinearLayout(context);
+        line.setOrientation(LinearLayout.HORIZONTAL);
+        line.setGravity(Gravity.CENTER_VERTICAL);
+        line.setPadding(0, dp(2), 0, dp(2));
+
+        TextView time = new TextView(context);
+        time.setText(alarm.timeText);
+        time.setTextColor(ContextCompat.getColor(context, R.color.ink));
+        time.setTextSize(13);
+        line.addView(time);
+
+        TextView label = new TextView(context);
+        label.setText(alarm.alarmLabel == null || alarm.alarmLabel.trim().isEmpty()
+                ? getString(R.string.alarm_default_label) : alarm.alarmLabel);
+        label.setTextColor(ContextCompat.getColor(context, R.color.muted));
+        label.setTextSize(12);
+        LinearLayout.LayoutParams labelParams = wrapParams();
+        labelParams.setMarginStart(dp(6));
+        line.addView(label, labelParams);
+
+        if (alarm.ringingNow) {
+            TextView ringing = new TextView(context);
+            ringing.setText(R.string.group_member_ringing);
+            ringing.setTextColor(ContextCompat.getColor(context, R.color.green_primary));
+            ringing.setTextSize(12);
+            ringing.setTypeface(ringing.getTypeface(), Typeface.BOLD);
+            LinearLayout.LayoutParams ringParams = wrapParams();
+            ringParams.setMarginStart(dp(8));
+            line.addView(ringing, ringParams);
+
+            MaterialButton mute = new MaterialButton(context);
+            mute.setText(R.string.group_mute);
+            mute.setOnClickListener(v -> requestMute(member, alarm));
+            LinearLayout.LayoutParams muteParams = wrapParams();
+            muteParams.setMarginStart(dp(8));
+            line.addView(mute, muteParams);
+        }
+        return line;
+    }
+
+    /**
+     * Sends CMD_MUTE for a peer's ringing alarm.
+     *
+     * <p>{@code ownerDev} is the alarm's owner — the receiving side (design.md §4),
+     * i.e. the member whose alarm this is. Using my own deviceId here would be
+     * rejected by that member: the command must target an alarm on the receiver.
+     */
+    private void requestMute(@NonNull GroupMember member, @NonNull RemoteAlarm alarm) {
+        if (!manager.send(member.deviceId, GroupMessage.cmdMute(member.deviceId,
+                alarm.srcAlarmUid))) {
+            toast(R.string.group_mute_no_link);
+            return;
+        }
+        pendingMuteOwner = member.deviceId;
+        pendingMuteAt = System.currentTimeMillis();
     }
 
     private View buildChip(@NonNull String text, @NonNull Context context) {

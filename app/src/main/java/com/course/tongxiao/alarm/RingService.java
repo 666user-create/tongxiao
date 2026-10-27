@@ -75,10 +75,22 @@ public class RingService extends Service {
     private static volatile String ringingAlarmUid;
     private static volatile long ringingStartedAt;
 
+    /**
+     * Row id known synchronously when the start command arrives, before the DB read
+     * resolves the uid. Remote mute uses it as a fallback so a mute that lands in
+     * that few-milliseconds window still matches the ringing alarm.
+     */
+    private static volatile int ringingAlarmId = -1;
+
     /** @return uid of the alarm currently ringing, or null. */
     @Nullable
     public static String currentRingingUid() {
         return ringingAlarmUid;
+    }
+
+    /** @return row id of the alarm currently ringing, or -1. */
+    public static int currentRingingAlarmId() {
+        return ringingAlarmId;
     }
 
     /** @return wall-clock time the current ring started, or 0. */
@@ -104,6 +116,7 @@ public class RingService extends Service {
         }
 
         alarmId = intent.getIntExtra(EXTRA_ALARM_ID, -1);
+        ringingAlarmId = alarmId;
 
         // Contract of startForegroundService(): startForeground() must happen
         // within ~5s even when the request turns out invalid, otherwise the
@@ -303,6 +316,7 @@ public class RingService extends Service {
     private void shutdown() {
         ringing = false;
         ringingAlarmUid = null;
+        ringingAlarmId = -1;
         ringingStartedAt = 0L;
         releasePlayer();
         if (vibrator != null) {
@@ -342,6 +356,7 @@ public class RingService extends Service {
         destroyed = true;
         ringing = false;
         ringingAlarmUid = null;
+        ringingAlarmId = -1;
         ringingStartedAt = 0L;
         releasePlayer();
         if (vibrator != null) {

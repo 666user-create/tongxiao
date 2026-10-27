@@ -56,7 +56,19 @@ public class AlarmGatewayImpl implements AlarmGateway {
     @Override
     public boolean isRinging(@NonNull String alarmUid) {
         String current = RingService.currentRingingUid();
-        return current != null && current.equals(alarmUid);
+        if (current != null && current.equals(alarmUid)) {
+            return true;
+        }
+        // Fallback: between startForegroundService() and the DB read that resolves the
+        // uid, currentRingingUid() is still null. The row id is known immediately, so
+        // a mute arriving in that window still matches instead of answering
+        // NOT_RINGING while the alarm keeps ringing.
+        int ringingId = RingService.currentRingingAlarmId();
+        if (ringingId <= 0) {
+            return false;
+        }
+        Alarm alarm = db.alarmDao().getById(ringingId);
+        return alarm != null && alarmUid.equals(alarm.uid);
     }
 
     @Nullable

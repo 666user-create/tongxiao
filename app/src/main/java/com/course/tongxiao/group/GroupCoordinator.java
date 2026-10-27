@@ -175,32 +175,39 @@ public class GroupCoordinator {
         }
     }
 
+    /** Correlation tag carried on mute ACKs, so the initiator can attribute the answer. */
+    public static final String ACK_WHAT_MUTE = "MUTE:";
+
     /** design.md §3.2: mute is the only no-confirmation operation. */
     private void handleMute(@NonNull String sender, @NonNull GroupMessage message,
                             @NonNull Reply reply) {
+        String owner = message.string(GroupMessage.FIELD_OWNER_DEV, "").trim();
+        String uid = message.string(GroupMessage.FIELD_ALARM_UID, "").trim();
+        // Every answer is tagged: schedule pushes produce untagged ACKs, and the
+        // initiator must not mistake one for a mute result.
         if (!settings.isGroupMasterSwitchOn()) {
-            ack(reply, false, GroupProtocol.REASON_MASTER_SWITCH_OFF);
+            ackMute(reply, false, GroupProtocol.REASON_MASTER_SWITCH_OFF, uid);
             return;
         }
         GroupMember member = db.groupMemberDao().getByDeviceId(sender);
         if (member == null || (member.grantedMask & GroupMember.PERM_MUTE) == 0) {
-            ack(reply, false, GroupProtocol.REASON_PERMISSION_DENIED);
+            ackMute(reply, false, GroupProtocol.REASON_PERMISSION_DENIED, uid);
             return;
         }
         if (!isLinkFresh(member)) {
-            ack(reply, false, GroupProtocol.REASON_STALE_LINK);
+            ackMute(reply, false, GroupProtocol.REASON_STALE_LINK, uid);
             return;
         }
-        String owner = message.string(GroupMessage.FIELD_OWNER_DEV, "").trim();
-        String uid = message.string(GroupMessage.FIELD_ALARM_UID, "").trim();
         if (uid.isEmpty()) {
-            ack(reply, false, GroupProtocol.REASON_BAD_PAYLOAD);
+            ackMute(reply, false, GroupProtocol.REASON_BAD_PAYLOAD, uid);
             return;
         }
-        // A peer may only mute its own ringing alarm; otherwise one member could
-        // silence another member's alarm through a third device.
-        if (!sender.equals(owner)) {
-            ack(reply, false, GroupProtocol.REASON_PERMISSION_DENIED);
+        // design.md §4/§7④: ownerDev is the alarm's owner — the executing side, i.e.
+        // this device. A peer must never be able to target a third member's alarm
+        // through me, so the target has to be me. (Checking sender==owner would mean
+        // "mute your own alarm", which no remote peer ever sends.)
+        if (!identity.deviceId().equals(owner)) {
+            ackMute(reply, false, GroupProtocol.REASON_PERMISSION_DENIED, uid);
             return;
         }
         String failure;
@@ -211,12 +218,17 @@ public class GroupCoordinator {
             failure = GroupProtocol.REASON_INTERNAL_ERROR;
         }
         if (failure != null) {
-            ack(reply, false, failure);
+            ackMute(reply, false, failure, uid);
             return;
         }
-        ack(reply, true, null);
+        ackMute(reply, true, null, uid);
         // Receipt for the sender's op-log ("你静音了小李的 06:40"), design.md §4.
         reply.send(GroupMessage.notifyOp("MUTE " + uid, System.currentTimeMillis()));
+    }
+
+    private static void ackMute(@NonNull Reply reply, boolean ok, @Nullable String reason,
+                                @NonNull String uid) {
+        reply.send(GroupMessage.cmdAck(ok, reason, ACK_WHAT_MUTE + uid));
     }
 
     /** design.md §4 SYNC_PUSH: full replacement of one owner's schedule mirror. */
@@ -351,10 +363,10 @@ public class GroupCoordinator {
         try {
             JSONObject trusted = new JSONObject(payload.toString());
             trusted.put(GroupMessage.FIELD_STATS_DEVICE_ID, sender);
-            if (RequestPayloads.trim(
-                    trusted.optString(GroupMessage.FIELD_NICK, ""), MAX_NICK_LENGTH).isEmpty()) {
-                trusted.put(GroupMessage.FIELD_NICK, member.nick);
-            }
+            // The nickname comes from the local member row, never from the payload:
+            // otherwise a member could broadcast a snapshot that impersonates someone
+            // else on the leaderboard (design.md §8.2 "不信任发起端").
+            trusted.put(GroupMessage.FIELD_NICK, member.nick);
             if (peerStats.normalizeAndStore(trusted) == null) {
                 droppedStats.incrementAndGet();
             }

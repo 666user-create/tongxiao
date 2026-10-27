@@ -29,6 +29,18 @@
     <string name="group_left">已退出宿舍组</string>
     <string name="group_member_online_dot">●</string>
 
+    <!-- Remote mute (design.md §3.2: the only no-confirmation operation) -->
+    <string name="group_member_ringing">正在响</string>
+    <string name="group_mute">静音</string>
+    <string name="group_mute_ok">已静音舍友的闹钟</string>
+    <string name="group_mute_no_link">与舍友的连接已断开，稍后重试</string>
+    <string name="group_mute_denied">对方没有授予你静音权限</string>
+    <string name="group_mute_blocked">对方关闭了宿舍互助总闸</string>
+    <string name="group_mute_not_found">对方的这个闹钟已不存在</string>
+    <string name="group_mute_not_ringing">那个闹钟已经停了</string>
+    <string name="group_mute_stale">连接太久没有心跳，已失效</string>
+    <string name="group_mute_failed">静音失败：%1$s</string>
+
     <!-- Permission chips (group_members.grantedMask bits) -->
     <string name="perm_mute">可静音</string>
     <string name="perm_see">可看时刻表</string>

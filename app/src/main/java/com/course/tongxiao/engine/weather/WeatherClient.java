@@ -23,8 +23,10 @@ import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
@@ -70,6 +72,9 @@ public class WeatherClient {
     private static final int GEOCODE_CACHE_LIMIT = 64;
     private static final java.util.Map<String, double[]> GEOCODE_CACHE =
             new java.util.concurrent.ConcurrentHashMap<>();
+    /** Paths we already failed to resolve: retrying them only stalls the worker. */
+    private static final java.util.Set<String> GEOCODE_MISSES =
+            java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     /** Cached forecast older than this is never used (design.md §5.3). */
     public static final long CACHE_TTL_MILLIS = 24L * 60L * 60L * 1000L;
@@ -241,7 +246,20 @@ public class WeatherClient {
                 return triggerAtMillis;
             }
             long shifted = triggerAtMillis - minutes * 60_000L;
-            return shifted > clock.millis() ? shifted : triggerAtMillis;
+            if (shifted <= clock.millis()) {
+                return triggerAtMillis;
+            }
+            // Cross-midnight guard: the receiver re-evaluates the weekday/holiday rule
+            // against the day the alarm *fires on*. Shifting a 00:05 alarm back to
+            // 23:55 would make it fire on the previous day, where a WORKDAY_SMART
+            // alarm is "not due" -> it would be skipped and then re-armed, so the
+            // advance silently did nothing (and wrote a bogus SKIPPED_HOLIDAY event).
+            LocalDate shiftedDay = Instant.ofEpochMilli(shifted)
+                    .atZone(clock.getZone()).toLocalDate();
+            if (!shiftedDay.equals(day)) {
+                return triggerAtMillis;
+            }
+            return shifted;
         } catch (RuntimeException e) {
             Log.w(TAG, "advance skipped: " + e.getClass().getSimpleName());
             return triggerAtMillis; // 宁可不提前
@@ -350,15 +368,20 @@ public class WeatherClient {
     }
 
     /**
-     * Resolves a stored place name to coordinates.
+     * Resolves a stored region path to coordinates.
      *
-     * <p>The settings value is a region path such as {@code 浙江省 杭州市 西湖区}
-     * (space separated, from the three-level picker). The most specific part wins:
-     * a district is closer to the user than the province, so it is tried first.
-     * Resolution order per candidate: built-in table (suffix stripped, so
-     * {@code 杭州市} matches {@code 杭州}) then, when enabled, the geocoding API.
+     * <p>The settings value is a path such as {@code 浙江省 杭州市 西湖区}. Order:
+     * <ol>
+     *   <li>built-in table, suffix stripped ({@code 杭州市} → {@code 杭州});</li>
+     *   <li>geocoding, most specific candidate first, but <b>only when the result
+     *       actually belongs to the selected region</b> — Chinese district names
+     *       repeat across provinces ({@code 朝阳区} is Beijing and Changchun,
+     *       {@code 鼓楼区} is Nanjing/Fuzhou/Xuzhou), and taking the first hit would
+     *       mean "advance the alarm based on another city's weather", the exact
+     *       failure this class promises to avoid.</li>
+     * </ol>
      *
-     * @return {@code {latitude, longitude}} or null when nothing resolves
+     * @return {@code {latitude, longitude}} or null when nothing credible resolves
      */
     @Nullable
     private double[] coordinatesFor(@NonNull String key) {
@@ -372,13 +395,130 @@ public class WeatherClient {
         if (!geocodeFallback) {
             return null;
         }
-        for (int i = parts.length - 1; i >= 0; i--) {
-            double[] resolved = geocode(parts[i]);
-            if (resolved != null) {
-                return resolved;
+        // Cache key is the whole path: a leaf-name cache made 长春 朝阳区 inherit
+        // 北京 朝阳区's coordinates once the latter had been resolved.
+        double[] cached = GEOCODE_CACHE.get(key);
+        if (cached != null) {
+            return cached;
+        }
+        if (GEOCODE_MISSES.contains(key)) {
+            return null; // negative cache: do not retry (and stall) on every refresh
+        }
+        double[] resolved = geocodePath(key, parts);
+        if (resolved == null) {
+            if (GEOCODE_MISSES.size() > GEOCODE_CACHE_LIMIT) {
+                GEOCODE_MISSES.clear();
+            }
+            GEOCODE_MISSES.add(key);
+            return null;
+        }
+        if (GEOCODE_CACHE.size() > GEOCODE_CACHE_LIMIT) {
+            GEOCODE_CACHE.clear();
+        }
+        GEOCODE_CACHE.put(key, resolved);
+        return resolved;
+    }
+
+    /**
+     * Tries the most specific usable candidates, at most three requests, and only
+     * accepts a hit that belongs to the same region (see {@link #belongsToRegion}).
+     */
+    @Nullable
+    private double[] geocodePath(@NonNull String key, @NonNull String[] parts) {
+        List<String> candidates = new ArrayList<>();
+        if (parts.length >= 2) {
+            candidates.add(parts[parts.length - 1]);                       // district
+            candidates.add(parts[Math.min(1, parts.length - 1)]);           // city
+        } else if (parts.length == 1) {
+            candidates.add(parts[0]);
+        }
+        // Coarser segments identify the region; the leaf name alone does not, because
+        // 朝阳区/鼓楼区/城关区 repeat across provinces.
+        List<String> coarseSegments = new ArrayList<>();
+        for (int i = 0; i < parts.length - 1; i++) {
+            coarseSegments.add(stripAdminSuffix(parts[i]));
+        }
+        List<String> leafSegments = new ArrayList<>();
+        leafSegments.add(stripAdminSuffix(parts[parts.length - 1]));
+        for (String candidate : candidates) {
+            double[] hit = geocodeOne(key, candidate, coarseSegments, leafSegments);
+            if (hit != null) {
+                return hit;
             }
         }
         return null;
+    }
+
+    @Nullable
+    private double[] geocodeOne(@NonNull String cacheKey, @NonNull String place,
+                                @NonNull List<String> coarseSegments,
+                                @NonNull List<String> leafSegments) {
+        try {
+            String body = fetcher.get(buildGeocodeUrl(place));
+            JSONObject root = new JSONObject(body);
+            JSONArray results = root.optJSONArray("results");
+            if (results == null || results.length() == 0) {
+                return null;
+            }
+            for (int i = 0; i < results.length(); i++) {
+                JSONObject hit = results.optJSONObject(i);
+                if (hit == null || !belongsToRegion(hit, coarseSegments, leafSegments)) {
+                    continue; // same name, different province: not ours
+                }
+                double latitude = hit.getDouble("latitude");
+                double longitude = hit.getDouble("longitude");
+                if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+                    continue;
+                }
+                return new double[]{latitude, longitude};
+            }
+            return null;
+        } catch (Exception unresolvable) {
+            // Unknown place or offline: no advance rather than a wrong advance.
+            Log.i(TAG, "geocoding failed for \"" + place + "\" (" + cacheKey + "): "
+                    + unresolvable.getClass().getSimpleName());
+            return null;
+        }
+    }
+
+    /**
+     * Country must be China (when the API states it) and the hit must match one of
+     * the <b>coarser</b> segments (province or city). Matching only the leaf name is
+     * not enough: 朝阳区 exists in both 北京 and 长春, so a leaf-only rule would let
+     * the wrong city's weather decide whether to advance the alarm.
+     */
+    private static boolean belongsToRegion(@NonNull JSONObject hit,
+                                           @NonNull List<String> coarseSegments,
+                                           @NonNull List<String> leafSegments) {
+        String country = hit.optString("country_code", "");
+        if (!country.isEmpty() && !"CN".equalsIgnoreCase(country)) {
+            return false;
+        }
+        List<String> hitNames = new ArrayList<>();
+        for (String field : new String[]{"name", "admin1", "admin2", "admin3"}) {
+            String value = hit.optString(field, "");
+            if (!value.isEmpty()) {
+                hitNames.add(stripAdminSuffix(value));
+            }
+        }
+        if (hitNames.isEmpty()) {
+            return false; // nothing to verify against: refuse rather than guess
+        }
+        for (String segment : coarseSegments) {
+            if (!segment.isEmpty() && hitNames.contains(segment)) {
+                return true;
+            }
+        }
+        if (!coarseSegments.isEmpty()) {
+            return false; // coarser identity known but unmatched -> another province
+        }
+        // Single-segment path (a bare city/district): the leaf is all we can verify.
+        for (String segment : leafSegments) {
+            if (!segment.isEmpty() && hitNames.contains(segment)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** 浙江省 → 浙江, 杭州市 → 杭州, 西湖区 → 西湖 (only one trailing suffix). */
@@ -393,38 +533,6 @@ public class WeatherClient {
         return trimmed;
     }
 
-    /** Geocoding lookup with a small process-wide cache (avoid one call per refresh). */
-    @Nullable
-    private double[] geocode(@NonNull String place) {
-        double[] cached = GEOCODE_CACHE.get(place);
-        if (cached != null) {
-            return cached;
-        }
-        try {
-            String body = fetcher.get(buildGeocodeUrl(place));
-            JSONObject root = new JSONObject(body);
-            JSONArray results = root.optJSONArray("results");
-            if (results == null || results.length() == 0) {
-                return null;
-            }
-            JSONObject first = results.getJSONObject(0);
-            double latitude = first.getDouble("latitude");
-            double longitude = first.getDouble("longitude");
-            if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
-                return null;
-            }
-            double[] coordinates = {latitude, longitude};
-            if (GEOCODE_CACHE.size() > GEOCODE_CACHE_LIMIT) {
-                GEOCODE_CACHE.clear();
-            }
-            GEOCODE_CACHE.put(place, coordinates);
-            return coordinates;
-        } catch (Exception unresolvable) {
-            // Unknown place or offline: no advance rather than a wrong advance.
-            Log.i(TAG, "geocoding failed for \"" + place + "\": " + unresolvable);
-            return null;
-        }
-    }
 
     private static String buildGeocodeUrl(@NonNull String place) {
         String encoded;

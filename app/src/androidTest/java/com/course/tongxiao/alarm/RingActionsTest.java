@@ -87,6 +87,33 @@ public class RingActionsTest {
     }
 
     @Test
+    public void stoppedTwiceForTheSameRing_recordsOneEventOnly() {
+        Alarm a = insert(Alarm.RepeatMode.DAILY);
+        scheduler.schedule(a);
+        long fireAt = System.currentTimeMillis();
+
+        // Owner taps 停止 and a roommate mutes in the same window: two callers, one ring.
+        actions.onStopped(a, fireAt, "user");
+        actions.onStopped(a, fireAt + 800, "remote:peer-1");
+
+        List<AlarmEvent> events = events(a.id);
+        assertEquals("a single stop must not be counted twice", 1, events.size());
+        assertEquals(AlarmEvent.Type.STOPPED, events.get(0).type);
+    }
+
+    @Test
+    public void stoppedForADifferentRing_stillRecordsASecondEvent() {
+        Alarm a = insert(Alarm.RepeatMode.DAILY);
+        scheduler.schedule(a);
+        long first = System.currentTimeMillis();
+        long nextDay = first + 24L * 60 * 60 * 1000;
+
+        actions.onStopped(a, first, "user");
+        actions.onStopped(a, nextDay, "user");
+
+        assertEquals("two different rings are two events", 2, events(a.id).size());
+    }
+    @Test
     public void stopped_recurringAlarm_recordsEventAndRearms() {
         Alarm a = insert(Alarm.RepeatMode.DAILY);
         scheduler.schedule(a);

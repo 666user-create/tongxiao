@@ -47,6 +47,9 @@ import java.util.concurrent.Executors;
  */
 public class EditAlarmActivity extends AppCompatActivity {
 
+    /** Default cap for the weather advance, inside WeatherClient's 5..20 range. */
+    private static final int DEFAULT_ADVANCE_MAX_MIN = 10;
+
     public static final String EXTRA_ALARM_ID = "alarm_id";
 
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
@@ -69,6 +72,12 @@ public class EditAlarmActivity extends AppCompatActivity {
     private Slider snoozeSlider;
     private MaterialSwitch vibrateSwitch;
     private MaterialSwitch challengeSwitch;
+    private MaterialSwitch advanceWeatherSwitch;
+
+    /** Guards against double-tapping 保存 before the worker finishes. */
+    private boolean saving;
+
+    private com.course.tongxiao.engine.NextTriggerCalculator calculator;
 
     // Step 6.1/6.2 cards
     private View suggestionCard;
@@ -88,6 +97,7 @@ public class EditAlarmActivity extends AppCompatActivity {
         repository = new AlarmRepository(db);
         HolidayResolver resolver = new HolidayResolver(HolidayCalendar.loadFromAssets(this));
         scheduler = new AlarmScheduler(this, repository, resolver);
+        calculator = new com.course.tongxiao.engine.NextTriggerCalculator(resolver);
 
         alarmId = getIntent().getIntExtra(EXTRA_ALARM_ID, 0);
 
@@ -109,6 +119,7 @@ public class EditAlarmActivity extends AppCompatActivity {
         snoozeSlider = findViewById(R.id.edit_snooze);
         vibrateSwitch = findViewById(R.id.edit_vibrate);
         challengeSwitch = findViewById(R.id.edit_challenge);
+        advanceWeatherSwitch = findViewById(R.id.edit_advance_weather);
 
         timeButton.setOnClickListener(v -> openTimePicker());
         repeatGroup.setOnCheckedChangeListener((group, checkedId) -> updateVisibility());
@@ -197,10 +208,23 @@ public class EditAlarmActivity extends AppCompatActivity {
                 suggestion = null;
                 sampleDays = 0;
             }
-            final int weatherAdvance = db.weatherCacheDao() == null ? 0
-                    : new com.course.tongxiao.engine.weather.WeatherClient(db.weatherCacheDao())
-                    .advanceMinutes(new com.course.tongxiao.data.SettingsStore(this).getCity(),
-                            java.time.LocalDate.now().plusDays(1).toString(), 20);
+            // Weather hint: only meaningful when this alarm opted in, and it must
+            // describe the day the alarm actually rings on (not always "tomorrow").
+            final String weatherAdvanceText;
+            if (loaded != null && loaded.advanceEnabled) {
+                java.time.LocalDateTime next = calculator == null
+                        ? null : calculator.nextTrigger(loaded, java.time.LocalDateTime.now());
+                String day = next == null ? "" : formatNext(next);
+                int advance = db.weatherCacheDao() == null ? 0
+                        : new com.course.tongxiao.engine.weather.WeatherClient(db.weatherCacheDao())
+                        .advanceMinutes(new com.course.tongxiao.data.SettingsStore(this).getCity(),
+                                (next == null ? java.time.LocalDate.now().plusDays(1)
+                                        : next.toLocalDate()).toString(), 20);
+                weatherAdvanceText = advance <= 0 || day.isEmpty() ? null
+                        : getString(R.string.smart_weather_hint, day, advance);
+            } else {
+                weatherAdvanceText = null;
+            }
 
             runOnUiThread(() -> {
                 if (loaded == null) {
@@ -215,11 +239,12 @@ public class EditAlarmActivity extends AppCompatActivity {
                 snoozeSlider.setValue(Math.max(5, Math.min(30, loaded.snoozeMin)));
                 vibrateSwitch.setChecked(loaded.vibrate);
                 skipHolidaysSwitch.setChecked(loaded.skipHolidays);
+                advanceWeatherSwitch.setChecked(loaded.advanceEnabled);
                 challengeSwitch.setChecked(!TextUtils.isEmpty(loaded.challengeOverrideJson)
                         && ChallengeConfig.fromJson(loaded.challengeOverrideJson).mode
                         != ChallengeConfig.Mode.DIRECT);
                 applyRepeatToUi(loaded);
-                renderSuggestion(suggestion, sampleDays, weatherAdvance);
+                renderSuggestion(suggestion, sampleDays, weatherAdvanceText);
             });
         });
     }
@@ -227,23 +252,26 @@ public class EditAlarmActivity extends AppCompatActivity {
     /** Shows the adaptive suggestion card and/or the weather advance hint. */
     private void renderSuggestion(
             @Nullable com.course.tongxiao.engine.adaptive.Suggestion suggestion,
-            int sampleDays, int weatherAdvance) {
-        if (weatherAdvance > 0) {
+            int sampleDays, @Nullable String weatherAdvanceText) {
+        if (weatherAdvanceText != null) {
             weatherHint.setVisibility(View.VISIBLE);
-            weatherHint.setText(getString(R.string.smart_weather_hint, weatherAdvance));
+            weatherHint.setText(weatherAdvanceText);
         } else {
             weatherHint.setVisibility(View.GONE);
         }
+        boolean hasWeather = weatherAdvanceText != null;
 
         if (suggestion == null) {
             if (sampleDays > 0) {
                 suggestionCard.setVisibility(View.VISIBLE);
+                suggestionText.setVisibility(View.VISIBLE);
+                suggestionTitle.setVisibility(View.VISIBLE);
                 suggestionText.setText(getString(R.string.smart_suggestion_recording, sampleDays));
                 suggestionActions.setVisibility(View.GONE);
             } else {
-                suggestionCard.setVisibility(weatherAdvance > 0 ? View.VISIBLE : View.GONE);
-                suggestionTitle.setVisibility(weatherAdvance > 0 ? View.GONE : View.VISIBLE);
-                if (weatherAdvance > 0) {
+                suggestionCard.setVisibility(hasWeather ? View.VISIBLE : View.GONE);
+                suggestionTitle.setVisibility(hasWeather ? View.GONE : View.VISIBLE);
+                if (hasWeather) {
                     suggestionText.setVisibility(View.GONE);
                 }
             }
@@ -341,16 +369,27 @@ public class EditAlarmActivity extends AppCompatActivity {
         // Challenge is opt-in (design decision): null = inherit the app default.
         alarm.challengeOverrideJson = challengeSwitch.isChecked()
                 ? ChallengeConfig.quizDefault().toJson() : null;
+        // Weather advance is opt-in per alarm (design.md §5.3 / §7②). This switch is
+        // the only writer of these two fields; without it the scheduler's advance
+        // branch could never trigger in production.
+        alarm.advanceEnabled = advanceWeatherSwitch.isChecked();
+        alarm.advanceMaxMin = alarm.advanceEnabled
+                ? (alarm.advanceMaxMin > 0 ? alarm.advanceMaxMin : DEFAULT_ADVANCE_MAX_MIN)
+                : 0;
         alarm.enabled = true; // saving an alarm implies enabling it
         return alarm;
     }
 
     private void save() {
+        if (saving) {
+            return; // double-tap on 保存 must not insert the same alarm twice
+        }
         Alarm.RepeatMode mode = readRepeatMode();
         if (mode == Alarm.RepeatMode.CUSTOM && readDayMask() == 0) {
             Toast.makeText(this, R.string.edit_need_day, Toast.LENGTH_SHORT).show();
             return;
         }
+        saving = true;
         final Alarm alarm = collectForm();
 
         worker.execute(() -> {
