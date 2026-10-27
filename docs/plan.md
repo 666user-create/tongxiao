@@ -1,4 +1,4 @@
-# SmartWake 执行与编码计划（v1）
+# Tongxiao 执行与编码计划（v1）
 
 配套设计文档：`docs/design.md`（已评审）。本计划把 M1~M6 拆成 **26 个原子步骤**，
 每步骤 = 实现 → 构建 → 测试 → 双重 review → 提交。**任何一步不过关卡，禁止进入下一步。**
@@ -27,11 +27,11 @@
 
 ## 0.1 全局约定（先定死，防口径漂移）
 
-- 工程目录 `D:\Android\smartalarm\app`（仓库已在 git，docs 先行）
+- 工程目录 `D:\Android\tongxiao\app`（仓库已在 git，docs 先行）
 - 工具链锁死：AGP 8.13.2 / Gradle 8.14.3（wrapper 用腾讯云镜像）/ JDK 17（`D:\Android\jdk-17`）/ compileSdk 36 / minSdk 26
 - 语言 Java 为主；不引入 Kotlin、不引入 Hilt（用 Application 手动注入单例，课程项目够用且答辩好讲）
 - 依赖白名单：material、room-{runtime,compiler,testing}、lifecycle-{viewmodel,livedata}、work-runtime、gson、constraintlayout。加新依赖须走 G3 例外审批（问你）
-- 包结构：`com.course.smartalarm.{data,engine,alarm,group,ui,stats}`
+- 包结构：`com.course.tongxiao.{data,engine,alarm,group,ui,stats}`
 - 提交规范：`feat(step 2.3): RingService 前台服务与响铃链路` —— 一步一 commit，坏了 revert 一步
 - 模拟器策略：AVD `Pixel_7_API_36` 一台主用；网络步骤起第二台（`Pixel_7_API_36_b`，M4 前创建）
 
@@ -43,7 +43,7 @@
 - 风险点：wrapper 镜像、JDK 路径 —— 直接复用 verify-app 已验证的配置
 
 **Step 1.2 Room 全量 schema**
-- 产出：6 实体+6 DAO+`SmartWakeDb`（design.md §3 字段一比一）；`fallbackToDestructiveMigration`（课程项目，v1 不做迁移链）
+- 产出：6 实体+6 DAO+`TongxiaoDb`（design.md §3 字段一比一）；`fallbackToDestructiveMigration`（课程项目，v1 不做迁移链）
 - 验证：G2=每 DAO 至少 1 条 insert/query/update 内存库测试；G5=schema JSON 导出比对字段
 - 评审重点：枚举落库用 TypeConverter 存稳定字符串，不存 ordinal
 
@@ -60,11 +60,11 @@
 
 **Step 2.2 AlarmScheduler**
 - 产出：schedule/cancel/rescheduleAll；`setAlarmClock` + 唯一 requestCode 规则 + `PendingIntent.FLAG_IMMUTABLE`；SCHEDULE_EXACT_ALARM 运行时检查
-- 验证：G5=**无 UI 阶段用 instrumentation 测试直接向 Room 插一条闹钟并调 schedule()**，`dumpsys alarm | findstr smartalarm` 看到注册项；改 5 分钟后再 dump 确认替换而非叠加（幂等）
+- 验证：G5=**无 UI 阶段用 instrumentation 测试直接向 Room 插一条闹钟并调 schedule()**，`dumpsys alarm | findstr tongxiao` 看到注册项；改 5 分钟后再 dump 确认替换而非叠加（幂等）
 
 **Step 2.3 响铃链路：Receiver→RingService→StopRingActivity**
 - 产出：AlarmReceiver（仅转发，不长活）；RingService（前台服务 type=alarm、AudioManager 铃声循环+振动、WakeLock）；StopRingActivity（showWhenLocked/turnScreenOn、贪睡/停止按钮、写 alarm_events）；**首次申请 POST_NOTIFICATIONS（Android 13+ 运行时权限）与通知渠道，本步落地**
-- 验证：G5=**此阶段尚无 UI，用调试入口触发**：`adb shell am broadcast -a com.course.smartalarm.DEBUG_FIRE --ei alarm_id 1`（调试广播仅 debug 变体注册）设 1 分钟后闹钟实测响铃→停止；再测贪睡；`dumpsys activity services` 看前台类型
+- 验证：G5=**此阶段尚无 UI，用调试入口触发**：`adb shell am broadcast -a com.course.tongxiao.DEBUG_FIRE --ei alarm_id 1`（调试广播仅 debug 变体注册）设 1 分钟后闹钟实测响铃→停止；再测贪睡；`dumpsys activity services` 看前台类型
 - 评审重点：服务停止路径（异常也要 stopForeground，防常驻通知残留）
 
 **Step 2.4 系统事件恢复**
@@ -105,7 +105,7 @@
 **Step 6.2 WeatherClient**：Open-Meteo 拉取+weather_cache+24h 失效+失败静默；G2=解析测试（mock JSON）；G5=断网演练不崩
 **Step 6.3 统计页**：自绘折线（起床趋势）+贪睡榜+被静音趣味榜
 **Step 6.4 保活加固**：WorkManager 6h 自检补排；品牌检测+小米/华为图文引导页
-**Step 6.5 ContentProvider（加分项，可选）**：对外只读 `content://com.course.smartalarm.alarms`
+**Step 6.5 ContentProvider（加分项，可选）**：对外只读 `content://com.course.tongxiao.alarms`
 
 ## 阶段 7 —— 验收
 
