@@ -1,96 +1,94 @@
 package com.course.tongxiao;
 
 import android.Manifest;
-import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
-import android.view.View;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
-import androidx.lifecycle.ViewModelProvider;
-import androidx.recyclerview.widget.LinearLayoutManager;
-import androidx.recyclerview.widget.RecyclerView;
+import androidx.fragment.app.Fragment;
 
-import com.course.tongxiao.alarm.AlarmScheduler;
-import com.course.tongxiao.data.TongxiaoDb;
-import com.course.tongxiao.data.repository.AlarmRepository;
-import com.course.tongxiao.engine.HolidayCalendar;
-import com.course.tongxiao.engine.HolidayResolver;
-import com.course.tongxiao.ui.AlarmListAdapter;
-import com.course.tongxiao.ui.AlarmListViewModel;
-
-import java.util.List;
+import com.course.tongxiao.ui.AlarmListFragment;
+import com.course.tongxiao.ui.SettingsFragment;
+import com.google.android.material.bottomnavigation.BottomNavigationView;
 
 /**
- * Step 3.1: alarm list screen (design.md §7 ①).
+ * Step 3.3: tab host (design.md §7). Tabs: alarms / settings; the dorm tab joins
+ * with Step 5.5 when the peer-link UI exists.
  *
- * <p>Shows the alarms, a "tomorrow is a workday / holiday" subtitle (the holiday
- * engine made visible), an empty state, and lets the switch enable/disable an
- * alarm. The edit screen arrives in Step 3.2.
+ * <p>Fragments are swapped manually (FragmentContainerView + show/hide) — the
+ * Navigation component is not a dependency of this project by design.
  */
 public class MainActivity extends AppCompatActivity {
 
     private static final int REQ_POST_NOTIFICATIONS = 100;
 
-    private AlarmListViewModel viewModel;
-    private AlarmListAdapter adapter;
-    private RecyclerView list;
-    private View emptyState;
+    private static final String TAG_ALARMS = "tab_alarms";
+    private static final String TAG_SETTINGS = "tab_settings";
 
     @Override
-    protected void onCreate(Bundle savedInstanceState) {
+    protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        list = findViewById(R.id.alarm_list);
-        emptyState = findViewById(R.id.empty_state);
+        BottomNavigationView nav = findViewById(R.id.bottom_nav);
+        nav.setOnItemSelectedListener(item -> {
+            if (item.getItemId() == R.id.tab_settings) {
+                showSettings();
+            } else {
+                showAlarms();
+            }
+            return true;
+        });
 
-        TongxiaoDb db = TongxiaoDb.get(this);
-        AlarmRepository repository = new AlarmRepository(db);
-        HolidayResolver resolver = new HolidayResolver(HolidayCalendar.loadFromAssets(this));
-        AlarmScheduler scheduler = new AlarmScheduler(this, repository, resolver);
-
-        viewModel = new ViewModelProvider(this,
-                new AlarmListViewModelFactory(repository, scheduler, resolver))
-                .get(AlarmListViewModel.class);
-
-        adapter = new AlarmListAdapter(
-                (alarm, enabled) -> viewModel.setEnabled(alarm, enabled),
-                alarm -> {
-                    Intent edit = new Intent(this, com.course.tongxiao.ui.EditAlarmActivity.class);
-                    edit.putExtra(com.course.tongxiao.ui.EditAlarmActivity.EXTRA_ALARM_ID, alarm.id);
-                    startActivity(edit);
-                });
-        list.setLayoutManager(new LinearLayoutManager(this));
-        list.setAdapter(adapter);
-
-        findViewById(R.id.add_alarm).setOnClickListener(v ->
-                startActivity(new Intent(this, com.course.tongxiao.ui.EditAlarmActivity.class)));
-
-        viewModel.getAlarms().observe(this, this::render);
-        viewModel.getTomorrowStatus().observe(this,
-                text -> ((android.widget.TextView) findViewById(R.id.tomorrow_status)).setText(text));
+        if (savedInstanceState == null) {
+            nav.setSelectedItemId(R.id.tab_alarms);
+            showAlarms();
+        } else {
+            // Fragments were restored by the FragmentManager.
+            Fragment current = getSupportFragmentManager().findFragmentById(R.id.tab_container);
+            if (current instanceof SettingsFragment) {
+                nav.setSelectedItemId(R.id.tab_settings);
+            } else {
+                nav.setSelectedItemId(R.id.tab_alarms);
+            }
+        }
 
         ensureNotificationPermission();
     }
 
-    private void render(List<com.course.tongxiao.data.entity.Alarm> alarms) {
-        adapter.submitList(alarms);
-        boolean empty = alarms == null || alarms.isEmpty();
-        emptyState.setVisibility(empty ? View.VISIBLE : View.GONE);
-        list.setVisibility(empty ? View.GONE : View.VISIBLE);
+    private void showAlarms() {
+        swap(TAG_ALARMS, AlarmListFragment::new);
     }
 
-    @Override
-    protected void onResume() {
-        super.onResume();
-        if (viewModel != null) {
-            viewModel.refreshTomorrowStatus();
+    private void showSettings() {
+        swap(TAG_SETTINGS, SettingsFragment::new);
+    }
+
+    /**
+     * Adds the target fragment once, then hides every other tab so state (scroll
+     * position, switch state) survives tab switching.
+     */
+    private void swap(String tag, java.util.function.Supplier<Fragment> factory) {
+        androidx.fragment.app.FragmentManager fm = getSupportFragmentManager();
+        androidx.fragment.app.FragmentTransaction tx = fm.beginTransaction();
+        for (Fragment existing : fm.getFragments()) {
+            if (existing.getId() == R.id.tab_container) {
+                tx.hide(existing);
+            }
         }
+        Fragment target = fm.findFragmentByTag(tag);
+        if (target == null) {
+            target = factory.get();
+            tx.add(R.id.tab_container, target, tag);
+        } else {
+            tx.show(target);
+        }
+        tx.commit();
     }
 
     private void ensureNotificationPermission() {
@@ -106,28 +104,9 @@ public class MainActivity extends AppCompatActivity {
                 REQ_POST_NOTIFICATIONS);
     }
 
-    /** Simple hand-rolled factory: no DI framework in this project by design. */
-    private static final class AlarmListViewModelFactory
-            implements ViewModelProvider.Factory {
-        private final AlarmRepository repository;
-        private final AlarmScheduler scheduler;
-        private final HolidayResolver resolver;
-
-        AlarmListViewModelFactory(AlarmRepository repository, AlarmScheduler scheduler,
-                                  HolidayResolver resolver) {
-            this.repository = repository;
-            this.scheduler = scheduler;
-            this.resolver = resolver;
-        }
-
-        @NonNull
-        @Override
-        @SuppressWarnings("unchecked")
-        public <T extends androidx.lifecycle.ViewModel> T create(@NonNull Class<T> modelClass) {
-            if (modelClass.isAssignableFrom(AlarmListViewModel.class)) {
-                return (T) new AlarmListViewModel(repository, scheduler, resolver);
-            }
-            throw new IllegalArgumentException("unknown ViewModel: " + modelClass.getName());
-        }
+    @NonNull
+    @Override
+    public String toString() {
+        return "MainActivity{tabs=alarms,settings}";
     }
 }

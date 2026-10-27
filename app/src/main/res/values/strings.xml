@@ -27,6 +27,17 @@
     <string name="edit_need_day">自定义星期至少选一天</string>
     <string name="edit_time_title">设置时间</string>
     <string name="alarm_add">新建闹钟</string>
+
+    <!-- Step 3.3 tabs & settings -->
+    <string name="tab_alarms">闹钟</string>
+    <string name="tab_settings">设置</string>
+    <string name="settings_holiday_ok">节假日数据已就绪（今年共 %1$d 天法定假日）</string>
+    <string name="settings_holiday_missing">%1$d 年节假日数据尚未更新，将按普通工作日判断</string>
+    <string name="settings_holiday_degraded">节假日数据解析失败，已降级为普通工作日判断</string>
+    <string name="settings_city_hint">天气城市</string>
+    <string name="settings_city_helper">留空则关闭天气联动</string>
+    <string name="settings_group_master">允许宿舍互助</string>
+    <string name="settings_group_master_helper">关闭后不再接受任何舍友的静音/代设指令（不会清除已授权项）</string>
     <string name="day_mon">一</string>
     <string name="day_tue">二</string>
     <string name="day_wed">三</string>
