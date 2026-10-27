@@ -55,7 +55,7 @@
 │ ①闹钟引擎   AlarmScheduler → AlarmReceiver → RingService │
 │ ②智能决策   HolidayResolver │ AdaptiveEngine │ WeatherClient │
 │ ③宿舍协作   GroupManager │ NsdDiscovery │ P2pServer/Client │
-│ ④数据层     Room(5表) │ assets 节假日 JSON │ SharedPreferences │
+│ ④数据层     Room(6表) │ assets 节假日 JSON │ SharedPreferences │
 │ ⑤保活       前台服务常驻通知 + 电池优化白名单引导          │
 └────────────────────────────────────────────────────────┘
 ```
@@ -149,6 +149,15 @@ AlarmManager 到点
 | payloadJson | text | 已按接收端规则**钳制后**的配置 |
 | createdAt / expireAt | long | 默认 2h 作废 |
 | status | enum | PENDING / ACCEPTED / REJECTED / EXPIRED |
+
+**weather_cache — 天气预报缓存**
+
+| 列 | 类型 | 说明 |
+|---|---|---|
+| city | text PK | 手动输入的城市 |
+| date | text | 预报对应日期 |
+| condition / minTemp | text / int | 恶劣判定输入 |
+| fetchedAt | long | 超 24h 视为无效 |
 
 全局默认挑战配置、定位城市、保活开关等存 SharedPreferences。
 
