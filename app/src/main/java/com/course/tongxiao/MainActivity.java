@@ -36,6 +36,11 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         BottomNavigationView nav = findViewById(R.id.bottom_nav);
+        // Edge-to-edge (targetSdk 36): the container needs the status bar inset and
+        // the bottom bar needs the navigation-bar inset, otherwise the toolbar is
+        // drawn underneath the system UI.
+        com.course.tongxiao.ui.UiInsets.padSystemBars(findViewById(R.id.tab_container));
+        com.course.tongxiao.ui.UiInsets.padBottomBar(nav);
         nav.setOnItemSelectedListener(item -> {
             if (item.getItemId() == R.id.tab_settings) {
                 showSettings();

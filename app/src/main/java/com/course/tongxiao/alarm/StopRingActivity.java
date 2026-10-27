@@ -75,6 +75,7 @@ public class StopRingActivity extends Activity {
         }
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         setContentView(R.layout.activity_stop_ring);
+        com.course.tongxiao.ui.UiInsets.padSystemBars(findViewById(R.id.ring_root), 8, 8);
 
         db = TongxiaoDb.get(this);
         timeView = findViewById(R.id.stop_time);

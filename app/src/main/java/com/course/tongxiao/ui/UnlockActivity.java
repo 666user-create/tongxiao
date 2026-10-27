@@ -92,6 +92,7 @@ public class UnlockActivity extends AppCompatActivity implements SensorEventList
         }
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         setContentView(R.layout.activity_unlock);
+        com.course.tongxiao.ui.UiInsets.padSystemBars(findViewById(R.id.unlock_root), 8, 8);
 
         alarmId = getIntent().getIntExtra(EXTRA_ALARM_ID, -1);
         ringStartedAt = getIntent().getLongExtra(EXTRA_RING_STARTED_AT, 0L);

@@ -44,7 +44,19 @@
     <string name="settings_holiday_missing">%1$d 年节假日数据尚未更新，将按普通工作日判断</string>
     <string name="settings_holiday_degraded">节假日数据解析失败，已降级为普通工作日判断</string>
     <string name="settings_city_hint">天气城市</string>
-    <string name="settings_city_helper">留空则关闭天气联动</string>
+    <string name="settings_weather_title">天气联动</string>
+    <string name="settings_city_save">保存城市</string>
+    <string name="settings_city_clear">清除</string>
+    <string name="settings_city_saved">已保存城市：%1$s</string>
+    <string name="settings_city_cleared">已清除城市，天气联动已关闭</string>
+    <string name="settings_city_invalid">请先输入城市名，或直接点上面的常用城市</string>
+    <string name="settings_weather_on">当前城市：%1$s\n恶劣天气时闹钟会提前响（不用担心睡过头）</string>
+    <string name="settings_weather_off">未设置城市 · 天气联动未开启\n设置城市后，雨雪天气会自动提前叫醒你</string>
+    <string name="settings_group_title">宿舍互助</string>
+    <string name="city_beijing">北京</string>
+    <string name="city_shanghai">上海</string>
+    <string name="city_hangzhou">杭州</string>
+    <string name="city_shenzhen">深圳</string>
     <string name="settings_group_master">允许宿舍互助</string>
     <string name="settings_group_master_helper">关闭后不再接受任何舍友的静音/代设指令（不会清除已授权项）</string>
 

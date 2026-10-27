@@ -83,6 +83,9 @@ public class EditAlarmActivity extends AppCompatActivity {
         toolbar.inflateMenu(R.menu.menu_edit_alarm);
         toolbar.setOnMenuItemClickListener(this::onMenu);
         toolbar.setNavigationOnClickListener(v -> finish());
+        // Edge-to-edge: toolbar below the status bar, scroll area above the keyboard.
+        UiInsets.padSystemBars(toolbar);
+        UiInsets.padSystemBarsAndIme(findViewById(R.id.edit_scroll), 16);
 
         timeButton = findViewById(R.id.edit_time);
         labelInput = findViewById(R.id.edit_label);

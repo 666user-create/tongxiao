@@ -82,10 +82,43 @@ public class SettingsTabTest {
             TextInputEditText city = awaitView(scenario, R.id.settings_city, TextInputEditText.class);
             assertNotNull(city);
 
+            // Typing alone must NOT save (that was the "no sense of completion" bug).
             scenario.onActivity(activity -> city.setText("杭州"));
-            Thread.sleep(600); // TextWatcher → SettingsStore.apply()
+            Thread.sleep(400);
+            assertEquals("typing alone must not persist", originalCity, store.getCity());
+
+            // Explicit save does persist and updates the status line.
+            scenario.onActivity(activity -> activity.findViewById(R.id.settings_city_save).performClick());
+            Thread.sleep(600);
 
             assertEquals("杭州", store.getCity());
+            TextView status = awaitView(scenario, R.id.weather_status, TextView.class);
+            assertNotNull(status);
+            assertTrue("status line must confirm the saved city",
+                    status.getText().toString().contains("杭州"));
+        } finally {
+            store.setCity(originalCity);
+        }
+    }
+
+    @Test
+    public void quickCityChip_savesImmediately() throws Exception {
+        Context ctx = ApplicationProvider.getApplicationContext();
+        SettingsStore store = new SettingsStore(ctx);
+        String originalCity = store.getCity();
+
+        try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
+            openSettingsTab(scenario);
+            View chip = awaitView(scenario, R.id.chip_city_beijing, View.class);
+            assertNotNull(chip);
+            scenario.onActivity(activity -> activity.findViewById(R.id.chip_city_beijing).performClick());
+            Thread.sleep(600);
+
+            assertEquals("北京", store.getCity());
+            TextView status = awaitView(scenario, R.id.weather_status, TextView.class);
+            assertNotNull(status);
+            assertTrue("status line confirms a quick-picked city",
+                    status.getText().toString().contains("北京"));
         } finally {
             store.setCity(originalCity);
         }
