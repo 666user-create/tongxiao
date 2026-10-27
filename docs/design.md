@@ -102,6 +102,7 @@ AlarmManager 到点
 | hour / minute | int | |
 | dayMask | int (7bit) | 周一~周日 |
 | repeatMode | enum | ONCE / DAILY / CUSTOM / WORKDAY_SMART |
+| | | **ONCE 语义**：= "下一个该时刻响一次"（今天该时刻未过则今天，否则明天），响后自动置 enabled=false；不按节假日规则跳过（用户显式指定的一次性提醒），但若该日恰为法定假日，UI 询问"顺延到下一工作日？" |
 | skipHolidays | bool | 仅 WORKDAY_SMART/CUSTOM 生效：法定假跳过 |
 | ringtoneUri / vibrate | text / bool | |
 | snoozeMin | int | 贪睡间隔，默认 10 |
