@@ -137,20 +137,12 @@ AlarmManager 到点
 | 列 | 类型 | 说明 |
 |---|---|---|
 | ownerDeviceId | text（逻辑外键→group_members.deviceId） | |
-| **srcAlarmUid** | text | **对方 alarms.uid**（协议携带，见 §4 CMD_MUTE 定位）。用 uid 而非自增 id：对方重装/破坏式重建后 id 会从 1 重编，uid 不变，避免静音错闹钟 |
+| **srcAlarmUid** | text | **对方 alarms.uid**（协议携带，见 §4 CMD_MUTE 定位）。用 uid 而非自增 id：对方重装/破坏式重建后 id 会从 1 重编且可能命中**另一个**闹钟；旧 uid 则查不到（回 ALARM_NOT_FOUND），绝不会静音错闹钟 |
 | alarmLabel / timeText / repeatText | text | 展示用 |
 | enabled / ringingNow | bool | ringingNow 决定"静音"按钮可用性 |
 | syncedAt | long | |
 
 主键：(ownerDeviceId, srcAlarmUid)。SYNC_PUSH 全量替换该 owner 的镜像行（替换前接收端强制改写每行 ownerDeviceId，防跨 owner 污染）。
-
-### 3.3 外键与删除语义
-
-所有表间引用为**逻辑外键**（无 DB 级 FOREIGN KEY 约束），原因：Room 会对未加索引的 FK 列报 warning，且 v1 数据量下约束收益低。代价由规则补偿：
-
-- 删除 `alarms` 行时，Repository 必须**同事务**删除其 `alarm_events`（防孤儿事件污染 AdaptiveEngine 统计与统计页）。
-- 删除 `group_members`（退组）时，同事务删除该 owner 的 `remote_alarms` 与 `pending_requests`。
-- 以上清理只发生在 Repository 层；DAO 的 delete 方法 javadoc 注明"勿绕过 Repository 直接调"。
 
 **pending_requests — 待确认请求（改题目/代设闹钟）**
 
@@ -189,6 +181,14 @@ AlarmManager 到点
 
 代设闹钟的离线场景（舍友在家帮你设明早考试闹钟，你在宿舍睡着）：请求挂起 `pending_requests`，2 小时无人值守自动作废；若你醒来（app 前台）仍有 PENDING，弹补确认。**不做"永远不生效"也不做"偷偷生效"。**
 
+### 3.3 外键与删除语义
+
+所有表间引用为**逻辑外键**（无 DB 级 FOREIGN KEY 约束），原因：Room 会对未加索引的 FK 列报 warning，且 v1 数据量下约束收益低。代价由规则补偿：
+
+- 删除 `alarms` 行时，Repository 必须**同事务**删除其 `alarm_events`（`AlarmEventDao.deleteByAlarm`），防孤儿事件污染 AdaptiveEngine 统计与统计页。
+- 删除 `group_members`（退组）时，同事务删除该 owner 的 `remote_alarms`（`clearOwner`）与 `pending_requests`（`deleteBySender`）。
+- 以上清理只发生在 Repository 层；DAO 的 delete 方法 javadoc 注明"勿绕过 Repository 直接调"。
+
 ---
 
 ## 4. 局域网协作协议
@@ -202,7 +202,7 @@ AlarmManager 到点
 | HELLO | 双向 | dev, nick | 握手，验组码 |
 | BYE | 双向 | — | 优雅断开 |
 | SYNC_PUSH | 主动 | alarms:[{uid,label,time,repeat,enabled,ringing}] | 推自己时刻表，uid=本机 alarms.uid（需对方授予 bit1 可见） |
-| CMD_MUTE | 发起→执行 | ownerDev, alarmUid | 静音响铃中闹钟（alarmUid 来自 SYNC_PUSH，执行端按 uid 查本机 alarms），立即执行 |
+| CMD_MUTE | 发起→执行 | ownerDev, alarmUid | 静音响铃中闹钟（alarmUid 来自 SYNC_PUSH，执行端按 uid 查本机 alarms），立即执行；查不到回 CMD_ACK{ok:false, reason:ALARM_NOT_FOUND} 并令对端重发 SYNC_PUSH 刷新镜像 |
 | CMD_ACK | 执行→发起 | ok, reason | 回执 |
 | NOTIFY_OP | 执行→发起 | what, at | 操作回执通知（"你静音了小李的 06:40"） |
 | SET_REQUEST | 发起 | reqId, type, payload | 改题目/代设/删闹钟申请 |

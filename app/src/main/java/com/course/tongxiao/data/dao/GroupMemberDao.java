@@ -1,5 +1,6 @@
 package com.course.tongxiao.data.dao;
 
+import androidx.annotation.Nullable;
 import androidx.lifecycle.LiveData;
 import androidx.room.Dao;
 import androidx.room.Delete;
@@ -15,14 +16,15 @@ import java.util.List;
 public interface GroupMemberDao {
 
     /**
-     * Full-row insert-or-replace. Only call with a row that was read whole via
-     * {@link #getByDeviceId}/{@link #getAll()} — REPLACE drops columns of a
-     * partially built object. For field-level changes use {@link #updateProfile}
-     * or {@link #setGrantedMask}.
+     * Insert-or-replace a row that carries ALL columns: a freshly built member
+     * (all fields filled) or one read back from DB then modified. Passing a
+     * partially built object would REPLACE-drop joinAt/online/lastSeenAt; use
+     * {@link #updateProfile} / {@link #setGrantedMask} for field-level edits.
      */
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     void upsert(GroupMember member);
 
+    /** Leaving-group cleanup (design.md §3.3): call via GroupRepository, which also clears remote_alarms/pending_requests. */
     @Delete
     int delete(GroupMember member);
 
@@ -40,6 +42,7 @@ public interface GroupMemberDao {
     @Query("SELECT * FROM group_members")
     List<GroupMember> getAll();
 
+    @Nullable
     @Query("SELECT * FROM group_members WHERE deviceId = :deviceId")
     GroupMember getByDeviceId(String deviceId);
 

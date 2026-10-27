@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "806950917500c35b21d6cb63e08a776c",
+    "identityHash": "c0aac4380f578ff62945be1bb61311b8",
     "entities": [
       {
         "tableName": "alarms",
@@ -108,7 +108,18 @@
           "columnNames": [
             "id"
           ]
-        }
+        },
+        "indices": [
+          {
+            "name": "index_alarms_uid",
+            "unique": true,
+            "columnNames": [
+              "uid"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_alarms_uid` ON `${TABLE_NAME}` (`uid`)"
+          }
+        ]
       },
       {
         "tableName": "alarm_events",
@@ -383,7 +394,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '806950917500c35b21d6cb63e08a776c')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'c0aac4380f578ff62945be1bb61311b8')"
     ]
   }
 }

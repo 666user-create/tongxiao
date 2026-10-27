@@ -2,12 +2,14 @@ package com.course.tongxiao.data.entity;
 
 import androidx.annotation.NonNull;
 import androidx.room.Entity;
+import androidx.room.Index;
 import androidx.room.PrimaryKey;
 
 import java.util.UUID;
 
 /** Alarm body, one row per user alarm (design.md §3). */
-@Entity(tableName = "alarms")
+@Entity(tableName = "alarms",
+        indices = @Index(value = "uid", unique = true))
 public class Alarm {
 
     public enum RepeatMode { ONCE, DAILY, CUSTOM, WORKDAY_SMART }
@@ -17,8 +19,10 @@ public class Alarm {
 
     /**
      * Stable cross-device identifier (design.md §3/§4). Never reuse {@link #id}
-     * in protocol payloads: autoincrement restarts after destructive rebuild and
-     * would make CMD_MUTE target the wrong alarm.
+     * in protocol payloads: autoincrement restarts after a destructive rebuild,
+     * so an old id could hit a DIFFERENT alarm. An old uid instead simply finds
+     * nothing (CMD_MUTE answers ALARM_NOT_FOUND), which cannot mute the wrong
+     * one. Unique index guards against copy/paste duplicating a uid.
      */
     @NonNull
     public String uid = UUID.randomUUID().toString();

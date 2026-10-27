@@ -118,6 +118,24 @@ public class TongxiaoDbTest {
         assertTrue(!fresh.uid.equals(new Alarm().uid));
     }
 
+    @Test
+    public void alarm_uidUniqueIndexRejectsDuplicate() {
+        Alarm a = alarm(7, 0);
+        db.alarmDao().insert(a);
+
+        Alarm dup = alarm(8, 0);
+        dup.uid = a.uid; // simulates a "copy alarm" that reuses the source uid
+
+        boolean rejected = false;
+        try {
+            db.alarmDao().insert(dup);
+        } catch (RuntimeException expected) {
+            rejected = true;
+        }
+        assertTrue("duplicate uid must be rejected by the unique index", rejected);
+        assertEquals("only the original row exists", 1, db.alarmDao().getAll().size());
+    }
+
     // ---- enum persistence: raw TEXT must equal enum names (plan.md Step 1.2 review point) ----
 
     @Test
@@ -213,7 +231,7 @@ public class TongxiaoDbTest {
         db.groupMemberDao().upsert(m);
 
         m.nick = "小李子";
-        db.groupMemberDao().upsert(m); // full-row REPLACE, same object read back
+        db.groupMemberDao().upsert(m); // full-row REPLACE, same fully-populated object
         assertEquals(1, db.groupMemberDao().getAll().size());
         assertEquals("小李子", db.groupMemberDao().getByDeviceId("dev-A").nick);
 
@@ -228,9 +246,14 @@ public class TongxiaoDbTest {
         assertEquals("lastSeenAt survived", 999, got.lastSeenAt);
         assertEquals("mask survived", 3, got.grantedMask);
 
-        // Total switch (design.md §3.2).
+        // Total switch (design.md §3.2) — must be a targeted UPDATE too.
         db.groupMemberDao().setGrantedMask("dev-A", 0);
-        assertEquals(0, db.groupMemberDao().getByDeviceId("dev-A").grantedMask);
+        GroupMember afterRevoke = db.groupMemberDao().getByDeviceId("dev-A");
+        assertEquals(0, afterRevoke.grantedMask);
+        assertEquals("revoke must not wipe nick", "小李四", afterRevoke.nick);
+        assertEquals("revoke must not wipe joinAt", 100, afterRevoke.joinAt);
+        assertTrue("revoke must not wipe online", afterRevoke.online);
+        assertEquals("revoke must not wipe lastSeenAt", 999, afterRevoke.lastSeenAt);
     }
 
     // ---- RemoteAlarmDao ----
@@ -264,9 +287,13 @@ public class TongxiaoDbTest {
         assertEquals("u-a1 still ringing", 1, db.remoteAlarmDao().getRinging().size());
         assertEquals("B replaced", 2, db.remoteAlarmDao().getAll("dev-B").size());
         assertEquals("smuggled row re-tagged to B", "dev-B", smuggled.ownerDeviceId);
+        // Assert the row is actually stored under B (query-level filter alone would be tautological).
+        List<String> bUids = new ArrayList<>();
         for (RemoteAlarm r : db.remoteAlarmDao().getAll("dev-B")) {
-            assertEquals("dev-B", r.ownerDeviceId);
+            bUids.add(r.srcAlarmUid);
         }
+        assertTrue("smuggled uid stored under B", bUids.contains("u-x"));
+        assertTrue("plain row stored under B", bUids.contains("u-b2"));
     }
 
     @Test

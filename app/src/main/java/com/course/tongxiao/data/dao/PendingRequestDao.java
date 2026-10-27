@@ -1,5 +1,6 @@
 package com.course.tongxiao.data.dao;
 
+import androidx.annotation.Nullable;
 import androidx.lifecycle.LiveData;
 import androidx.room.Dao;
 import androidx.room.Insert;
@@ -35,4 +36,13 @@ public interface PendingRequestDao {
     /** Expire sweep, runs on app start + before UI render (Step 5.3). */
     @Query("UPDATE pending_requests SET status = :to WHERE status = :from AND expireAt < :now")
     int expireOverdue(PendingRequest.Status from, PendingRequest.Status to, long now);
+
+    /** Existing row for a duplicate -1 insert (see {@link #insert} contract above). */
+    @Nullable
+    @Query("SELECT * FROM pending_requests WHERE reqId = :reqId")
+    PendingRequest getByReqId(String reqId);
+
+    /** Leaving-group cleanup (design.md §3.3), same transaction as GroupMemberDao.delete. */
+    @Query("DELETE FROM pending_requests WHERE fromDeviceId = :deviceId")
+    int deleteBySender(String deviceId);
 }
