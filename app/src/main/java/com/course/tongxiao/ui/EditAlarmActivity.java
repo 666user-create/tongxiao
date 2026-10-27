@@ -3,10 +3,10 @@ package com.course.tongxiao.ui;
 import android.content.Intent;
 import android.os.Bundle;
 import android.text.TextUtils;
-import android.view.Menu;
-import android.view.MenuItem;
+import android.view.View;
 import android.widget.EditText;
 import android.widget.RadioGroup;
+import android.widget.TimePicker;
 import android.widget.Toast;
 
 import androidx.annotation.Nullable;
@@ -23,10 +23,9 @@ import com.course.tongxiao.engine.challenge.ChallengeConfig;
 import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.button.MaterialButtonToggleGroup;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.materialswitch.MaterialSwitch;
 import com.google.android.material.slider.Slider;
-import com.google.android.material.timepicker.MaterialTimePicker;
-import com.google.android.material.timepicker.TimeFormat;
 
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
@@ -80,12 +79,13 @@ public class EditAlarmActivity extends AppCompatActivity {
 
         MaterialToolbar toolbar = findViewById(R.id.edit_toolbar);
         toolbar.setTitle(alarmId > 0 ? R.string.edit_title_edit : R.string.edit_title_new);
-        toolbar.inflateMenu(R.menu.menu_edit_alarm);
-        toolbar.setOnMenuItemClickListener(this::onMenu);
+        toolbar.setNavigationIcon(R.drawable.ic_back);
+        toolbar.setNavigationContentDescription(R.string.dialog_cancel);
         toolbar.setNavigationOnClickListener(v -> finish());
-        // Edge-to-edge: toolbar below the status bar, scroll area above the keyboard.
-        UiInsets.padSystemBars(toolbar);
-        UiInsets.padSystemBarsAndIme(findViewById(R.id.edit_scroll), 16);
+        // Edge-to-edge: pad the ROOT (not the fixed-height toolbar, which would
+        // squeeze its content out) and keep the scroll area above the keyboard.
+        UiInsets.padSystemBars(findViewById(R.id.edit_root));
+        UiInsets.padSystemBarsAndIme(findViewById(R.id.edit_scroll), 8);
 
         timeButton = findViewById(R.id.edit_time);
         labelInput = findViewById(R.id.edit_label);
@@ -99,6 +99,11 @@ public class EditAlarmActivity extends AppCompatActivity {
         timeButton.setOnClickListener(v -> openTimePicker());
         repeatGroup.setOnCheckedChangeListener((group, checkedId) -> updateVisibility());
 
+        findViewById(R.id.edit_save).setOnClickListener(v -> save());
+        MaterialButton delete = findViewById(R.id.edit_delete);
+        delete.setVisibility(alarmId > 0 ? View.VISIBLE : View.GONE);
+        delete.setOnClickListener(v -> delete());
+
         if (alarmId > 0) {
             loadExisting();
         } else {
@@ -108,39 +113,25 @@ public class EditAlarmActivity extends AppCompatActivity {
         updateVisibility();
     }
 
-    private boolean onMenu(MenuItem item) {
-        if (item.getItemId() == R.id.action_save) {
-            save();
-            return true;
-        }
-        if (item.getItemId() == R.id.action_delete) {
-            delete();
-            return true;
-        }
-        return false;
-    }
-
-    @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        getMenuInflater().inflate(R.menu.menu_edit_alarm, menu);
-        // Only an existing alarm can be deleted.
-        menu.findItem(R.id.action_delete).setVisible(alarmId > 0);
-        return true;
-    }
-
     private void openTimePicker() {
-        MaterialTimePicker picker = new MaterialTimePicker.Builder()
-                .setTimeFormat(TimeFormat.CLOCK_24H)
-                .setHour(hour)
-                .setMinute(minute)
-                .setTitleText(R.string.edit_time_title)
-                .build();
-        picker.addOnPositiveButtonClickListener(v -> {
-            hour = picker.getHour();
-            minute = picker.getMinute();
-            updateTimeLabel();
-        });
-        picker.show(getSupportFragmentManager(), "time_picker");
+        // Roller (spinner) picker: two wheels, hour then minute — the familiar
+        // scrolling interaction instead of typing digits.
+        View content = getLayoutInflater().inflate(R.layout.dialog_time_picker, null);
+        TimePicker picker = content.findViewById(R.id.time_picker);
+        picker.setIs24HourView(true);
+        picker.setHour(hour);
+        picker.setMinute(minute);
+
+        new MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.edit_time_title)
+                .setView(content)
+                .setNegativeButton(R.string.dialog_cancel, null)
+                .setPositiveButton(R.string.dialog_ok, (dialog, which) -> {
+                    hour = picker.getHour();
+                    minute = picker.getMinute();
+                    updateTimeLabel();
+                })
+                .show();
     }
 
     private void updateTimeLabel() {

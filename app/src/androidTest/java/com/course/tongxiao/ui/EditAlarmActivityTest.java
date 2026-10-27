@@ -50,11 +50,9 @@ public class EditAlarmActivityTest {
         }
     }
 
-    private void saveViaToolbar(ActivityScenario<EditAlarmActivity> scenario) {
-        scenario.onActivity(activity -> {
-            MaterialToolbar toolbar = activity.findViewById(R.id.edit_toolbar);
-            toolbar.getMenu().performIdentifierAction(R.id.action_save, 0);
-        });
+    private void saveViaButton(ActivityScenario<EditAlarmActivity> scenario) {
+        scenario.onActivity(activity ->
+                activity.findViewById(R.id.edit_save).performClick());
     }
 
     private boolean hasRegistration(Alarm alarm) {
@@ -75,7 +73,7 @@ public class EditAlarmActivityTest {
                 ((RadioGroup) activity.findViewById(R.id.edit_repeat_group))
                         .check(R.id.repeat_daily);
             });
-            saveViaToolbar(scenario);
+            saveViaButton(scenario);
             Thread.sleep(1500);
 
             List<Alarm> all = db.alarmDao().getAll();
@@ -110,7 +108,7 @@ public class EditAlarmActivityTest {
             Thread.sleep(800); // loadExisting() runs on the worker
             scenario.onActivity(activity ->
                     ((EditText) activity.findViewById(R.id.edit_label)).setText("新名字"));
-            saveViaToolbar(scenario);
+            saveViaButton(scenario);
             Thread.sleep(1500);
 
             Alarm stored = db.alarmDao().getById(seed.id);
@@ -134,10 +132,8 @@ public class EditAlarmActivityTest {
                 .putExtra(EditAlarmActivity.EXTRA_ALARM_ID, seed.id);
         try (ActivityScenario<EditAlarmActivity> scenario = ActivityScenario.launch(intent)) {
             Thread.sleep(800);
-            scenario.onActivity(activity -> {
-                MaterialToolbar toolbar = activity.findViewById(R.id.edit_toolbar);
-                toolbar.getMenu().performIdentifierAction(R.id.action_delete, 0);
-            });
+            scenario.onActivity(activity ->
+                    activity.findViewById(R.id.edit_delete).performClick());
             Thread.sleep(1500);
 
             assertNotNull("row deleted", db.alarmDao().getById(seed.id) == null ? "gone" : null);

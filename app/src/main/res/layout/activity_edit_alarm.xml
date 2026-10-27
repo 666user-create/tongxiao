@@ -2,6 +2,7 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/edit_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical">
@@ -25,21 +26,33 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="20dp">
+            android:paddingHorizontal="24dp"
+            android:paddingTop="8dp"
+            android:paddingBottom="16dp">
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/edit_time"
                 style="@style/Widget.Material3.Button.TextButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:textSize="56sp"
+                android:contentDescription="@string/edit_time_title"
+                android:textSize="64sp"
                 app:rippleColor="@color/green_container"
                 tools:text="07:30" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:gravity="center"
+                android:text="@string/edit_time_hint"
+                android:textColor="@color/muted"
+                android:textSize="12sp" />
 
             <com.google.android.material.textfield.TextInputLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
+                android:layout_marginTop="20dp"
                 android:hint="@string/edit_label_hint">
 
                 <com.google.android.material.textfield.TextInputEditText
@@ -54,9 +67,10 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="20dp"
+                android:layout_marginTop="24dp"
                 android:text="@string/edit_repeat_title"
                 android:textColor="@color/ink"
+                android:textSize="15sp"
                 android:textStyle="bold" />
 
             <RadioGroup
@@ -69,24 +83,28 @@
                     android:id="@+id/repeat_workday_smart"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:paddingVertical="6dp"
                     android:text="@string/edit_repeat_workday_smart" />
 
                 <RadioButton
                     android:id="@+id/repeat_daily"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:paddingVertical="6dp"
                     android:text="@string/edit_repeat_daily" />
 
                 <RadioButton
                     android:id="@+id/repeat_custom"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:paddingVertical="6dp"
                     android:text="@string/edit_repeat_custom" />
 
                 <RadioButton
                     android:id="@+id/repeat_once"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:paddingVertical="6dp"
                     android:text="@string/edit_repeat_once" />
             </RadioGroup>
 
@@ -101,8 +119,8 @@
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/day_mon"
                     style="@style/Widget.Material3.Button.OutlinedButton"
-                    android:layout_width="44dp"
-                    android:layout_height="44dp"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
                     android:insetLeft="2dp"
                     android:insetRight="2dp"
                     android:padding="0dp"
@@ -111,8 +129,8 @@
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/day_tue"
                     style="@style/Widget.Material3.Button.OutlinedButton"
-                    android:layout_width="44dp"
-                    android:layout_height="44dp"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
                     android:insetLeft="2dp"
                     android:insetRight="2dp"
                     android:padding="0dp"
@@ -121,8 +139,8 @@
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/day_wed"
                     style="@style/Widget.Material3.Button.OutlinedButton"
-                    android:layout_width="44dp"
-                    android:layout_height="44dp"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
                     android:insetLeft="2dp"
                     android:insetRight="2dp"
                     android:padding="0dp"
@@ -131,8 +149,8 @@
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/day_thu"
                     style="@style/Widget.Material3.Button.OutlinedButton"
-                    android:layout_width="44dp"
-                    android:layout_height="44dp"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
                     android:insetLeft="2dp"
                     android:insetRight="2dp"
                     android:padding="0dp"
@@ -141,8 +159,8 @@
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/day_fri"
                     style="@style/Widget.Material3.Button.OutlinedButton"
-                    android:layout_width="44dp"
-                    android:layout_height="44dp"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
                     android:insetLeft="2dp"
                     android:insetRight="2dp"
                     android:padding="0dp"
@@ -151,8 +169,8 @@
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/day_sat"
                     style="@style/Widget.Material3.Button.OutlinedButton"
-                    android:layout_width="44dp"
-                    android:layout_height="44dp"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
                     android:insetLeft="2dp"
                     android:insetRight="2dp"
                     android:padding="0dp"
@@ -161,8 +179,8 @@
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/day_sun"
                     style="@style/Widget.Material3.Button.OutlinedButton"
-                    android:layout_width="44dp"
-                    android:layout_height="44dp"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
                     android:insetLeft="2dp"
                     android:insetRight="2dp"
                     android:padding="0dp"
@@ -181,9 +199,10 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="20dp"
+                android:layout_marginTop="24dp"
                 android:text="@string/edit_snooze_title"
                 android:textColor="@color/ink"
+                android:textSize="15sp"
                 android:textStyle="bold" />
 
             <com.google.android.material.slider.Slider
@@ -199,7 +218,7 @@
                 android:id="@+id/edit_vibrate"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
+                android:layout_marginTop="12dp"
                 android:checked="true"
                 android:text="@string/edit_vibrate" />
 
@@ -207,7 +226,7 @@
                 android:id="@+id/edit_challenge"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="20dp"
+                android:layout_marginTop="12dp"
                 android:text="@string/edit_challenge" />
 
             <TextView
@@ -221,5 +240,32 @@
         </LinearLayout>
 
     </ScrollView>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/card"
+        android:orientation="horizontal"
+        android:paddingHorizontal="24dp"
+        android:paddingVertical="12dp">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/edit_save"
+            android:layout_width="0dp"
+            android:layout_height="56dp"
+            android:layout_weight="1"
+            android:text="@string/edit_save"
+            android:textSize="17sp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/edit_delete"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="wrap_content"
+            android:layout_height="56dp"
+            android:layout_marginStart="12dp"
+            android:text="@string/edit_delete"
+            android:textColor="@color/muted" />
+
+    </LinearLayout>
 
 </LinearLayout>

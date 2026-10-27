@@ -28,6 +28,9 @@
     <string name="edit_challenge_helper">默认关闭。开启后需答对 2 道选择题，长按 3 秒可紧急停止</string>
     <string name="edit_need_day">自定义星期至少选一天</string>
     <string name="edit_time_title">设置时间</string>
+    <string name="edit_time_hint">点上面的时间，用滚轮选择</string>
+    <string name="dialog_cancel">取消</string>
+    <string name="dialog_ok">确定</string>
     <string name="alarm_add">新建闹钟</string>
     <string name="day_mon">一</string>
     <string name="day_tue">二</string>
