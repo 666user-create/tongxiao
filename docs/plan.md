@@ -63,9 +63,9 @@
 - 验证：G5=**无 UI 阶段用 instrumentation 测试直接向 Room 插一条闹钟并调 schedule()**，`dumpsys alarm | findstr tongxiao` 看到注册项；改 5 分钟后再 dump 确认替换而非叠加（幂等）
 
 **Step 2.3 响铃链路：Receiver→RingService→StopRingActivity**
-- 产出：AlarmReceiver（仅转发，不长活）；RingService（前台服务 type=alarm、AudioManager 铃声循环+振动、WakeLock）；StopRingActivity（showWhenLocked/turnScreenOn、贪睡/停止按钮、写 alarm_events）；**首次申请 POST_NOTIFICATIONS（Android 13+ 运行时权限）与通知渠道，本步落地**
-- 验证：G5=**此阶段尚无 UI，用调试入口触发**：`adb shell am broadcast -a com.course.tongxiao.DEBUG_FIRE --ei alarm_id 1`（调试广播仅 debug 变体注册）设 1 分钟后闹钟实测响铃→停止；再测贪睡；`dumpsys activity services` 看前台类型
-- 评审重点：服务停止路径（异常也要 stopForeground，防常驻通知残留）
+- 产出：AlarmReceiver（goAsync+executor，禁止主线程查库；校验 uid 防陈旧注册）；RingService（前台服务 **type=mediaPlayback**〔平台无 alarm 类型〕、MediaPlayer 铃声循环+振动+WakeLock、环形通知含 fullScreenIntent 与"停止"action）；StopRingActivity（showWhenLocked/turnScreenOn、返回键等价停铃、onNewIntent 重定向、先停声后写库）；RingActions（停铃重排/ONCE 自关/贪睡钳制 1~30/跳过重排）；**首次申请 POST_NOTIFICATIONS 与通知渠道**
+- 验证：G5=RingService 前台服务+通知断言（fullScreenIntent/category/stop action）、StopRingActivity 用 ActivityScenario 验证渲染与 STOPPED 事件、返回键路径；**Android 10+ 后台禁 startActivity，全屏页只在锁屏/熄屏由系统拉起（亮屏时走通知）**
+- 评审重点：停铃入口闭环（通知 action+返回键+null 行）、startForeground 5s 契约、每闹钟铃声/振动落地、贪睡绕开节假日判定
 
 **Step 2.4 系统事件恢复**
 - 产出：BOOT_COMPLETED / TIME_SET / TIMEZONE_CHANGED 接收器 → rescheduleAll；Manifest 权限补齐
@@ -84,7 +84,7 @@
 **Step 4.1 ChallengeEngine（纯逻辑，TDD）**
 - 产出：算术题生成器（确定性种子可测）、题库加载（`quiz-bank.json` 内置 ~100 题：常识/逻辑/急转弯+难度标签）、判分、答错策略（重试/+30s/升难）
 - 验证：G2=生成器 1000 次抽样无重复选项/答案分布均匀；钳制函数单测（>5题→拒绝）
-**Step 4.2 UnlockActivity**：选择题 UI+进度+答错反馈+长按 3 秒紧急停止（不可配置移除）
+**Step 4.2 UnlockActivity**：选择题 UI+进度+答错反馈+长按 3 秒紧急停止（不可配置移除）；**停铃页显示"贪睡第 N 次"**（N 取当日该闹钟 SNOOZE 事件计数，承接 design.md §7③）
 - 验证：G5=响铃→挑战→通过/失败/紧急停止三路径
 **Step 4.3 摇一摇**：SensorManager 阈值计数+进度环；onPause 必 unregister（评审清单第 3 条重点）
 

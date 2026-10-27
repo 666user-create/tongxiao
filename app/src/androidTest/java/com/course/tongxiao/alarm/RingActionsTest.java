@@ -138,6 +138,21 @@ public class RingActionsTest {
     }
 
     @Test
+    public void snoozed_clampsOutOfRangeValues() {
+        Alarm a = insert(Alarm.RepeatMode.DAILY);
+        long now = System.currentTimeMillis();
+
+        actions.onSnoozed(a, now - 2_000, 0);
+        actions.onSnoozed(a, now - 1_000, 999);
+
+        // Ordered by fireAt: the 0-minute call is the older event.
+        List<AlarmEvent> events = events(a.id);
+        assertEquals(2, events.size());
+        assertTrue("0 minutes is clamped to 1", events.get(0).meta.contains("snooze:1"));
+        assertTrue("999 minutes is clamped to 30", events.get(1).meta.contains("snooze:30"));
+    }
+
+    @Test
     public void skipped_recordsHolidayEventAndRearmsNextValidDay() {
         Alarm a = insert(Alarm.RepeatMode.WORKDAY_SMART);
 

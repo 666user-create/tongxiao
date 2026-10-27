@@ -7,15 +7,12 @@ import static org.junit.Assert.assertTrue;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
-import android.graphics.Bitmap;
-import android.os.Environment;
 import android.widget.Button;
 import android.widget.TextView;
 
 import androidx.test.core.app.ActivityScenario;
 import androidx.test.core.app.ApplicationProvider;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
-import androidx.test.platform.app.InstrumentationRegistry;
 
 import com.course.tongxiao.R;
 import com.course.tongxiao.data.TongxiaoDb;
@@ -27,8 +24,6 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import java.io.File;
-import java.io.FileOutputStream;
 import java.util.List;
 
 /**
@@ -36,8 +31,12 @@ import java.util.List;
  *
  * <p>The system only surfaces StopRingActivity through the full-screen intent
  * when the device is locked or the screen is off (Android 10+ background-activity
- * rules), so this test launches the activity directly and verifies what it shows
- * and what stopping it records.
+ * rules), so this test launches the activity directly.
+ *
+ * <p>Uses the app-wide singleton database (that is what the activity uses) and
+ * deliberately does NOT close it: closing it would break every later test class
+ * in the same process ("connection pool has been closed"). Only this test's row
+ * is cleaned up.
  */
 @RunWith(AndroidJUnit4.class)
 public class StopRingActivityTest {
@@ -63,7 +62,6 @@ public class StopRingActivityTest {
     @After
     public void tearDown() {
         db.alarmDao().deleteById(alarmId);
-        db.close();
     }
 
     private Intent intentFor(int id) {
@@ -74,7 +72,7 @@ public class StopRingActivityTest {
     }
 
     @Test
-    public void showsAlarmTimeAndLabel_thenStopRecordsEvent() throws Exception {
+    public void showsAlarmTimeAndLabel_thenStopSilencesAndRecordsEvent() throws Exception {
         try (ActivityScenario<StopRingActivity> scenario =
                      ActivityScenario.launch(intentFor(alarmId))) {
 
@@ -88,9 +86,6 @@ public class StopRingActivityTest {
                 assertTrue("stop button clickable", stop.isEnabled());
             });
 
-            // Visual evidence for the acceptance record (pulled while the run is alive).
-            captureScreenshot("stop-screen.png");
-
             scenario.onActivity(activity -> activity.findViewById(R.id.btn_stop).performClick());
             Thread.sleep(1500); // stop runs on the activity's worker thread
 
@@ -102,20 +97,31 @@ public class StopRingActivityTest {
         }
     }
 
-    private void captureScreenshot(String name) {
-        try {
-            Bitmap shot = InstrumentationRegistry.getInstrumentation()
-                    .getUiAutomation().takeScreenshot();
-            File dir = ctx.getExternalFilesDir(Environment.DIRECTORY_PICTURES);
-            if (shot != null && dir != null) {
-                File out = new File(dir, name);
-                try (FileOutputStream fos = new FileOutputStream(out)) {
-                    shot.compress(Bitmap.CompressFormat.PNG, 100, fos);
-                }
-                Thread.sleep(3000); // window for the external adb pull
-            }
-        } catch (Exception ignored) {
-            // Screenshot is evidence only; never fail the behavioural assertions.
+    @Test
+    public void backPress_stopsTheAlarmInsteadOfLeavingItRinging() throws Exception {
+        try (ActivityScenario<StopRingActivity> scenario =
+                     ActivityScenario.launch(intentFor(alarmId))) {
+
+            scenario.onActivity(Activity::onBackPressed);
+            Thread.sleep(1500);
+
+            List<AlarmEvent> events = db.alarmEventDao().getRecent(alarmId, 0);
+            assertFalse("back press must still record STOPPED (ring silenced)",
+                    events.isEmpty());
+            assertEquals(AlarmEvent.Type.STOPPED, events.get(0).type);
+        }
+    }
+
+    @Test
+    public void missingAlarm_stillFinishesWithoutRingingForever() throws Exception {
+        int ghostId = alarmId + 5000;
+        try (ActivityScenario<StopRingActivity> scenario =
+                     ActivityScenario.launch(intentFor(ghostId))) {
+            Thread.sleep(1500);
+            // Deliberately no onActivity(): the activity finishes itself, so the
+            // assertion is that the scenario reached DESTROYED without crashing.
+            assertEquals("activity must finish for a deleted alarm",
+                    androidx.lifecycle.Lifecycle.State.DESTROYED, scenario.getState());
         }
     }
 }

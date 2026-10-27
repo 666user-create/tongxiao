@@ -1,10 +1,12 @@
 package com.course.tongxiao.alarm;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import android.Manifest;
 import android.app.ActivityManager;
+import android.app.Notification;
 import android.app.NotificationManager;
 import android.content.Context;
 import android.content.Intent;
@@ -23,7 +25,7 @@ import com.course.tongxiao.data.TongxiaoDb;
 import com.course.tongxiao.data.entity.Alarm;
 import com.course.tongxiao.data.repository.AlarmRepository;
 
-import org.junit.Assume;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -31,13 +33,12 @@ import org.junit.runner.RunWith;
 import java.util.List;
 
 /**
- * Step 2.3 G5: the ring chain really promotes a foreground service, and — when
- * the notification permission is available — posts the alarm notification that
- * carries the full-screen intent.
+ * Step 2.3 G5: the ring chain promotes a foreground service and posts the alarm
+ * notification that carries the full-screen intent and the Stop action.
  *
- * <p>Android 13+ hides notifications unless POST_NOTIFICATIONS is granted. The
- * test tries a shell grant via UiAutomation; if that is unavailable it still
- * asserts the foreground-service half and skips only the notification assertion.
+ * <p>The notification assertions run against the real NotificationManager; when
+ * POST_NOTIFICATIONS cannot be granted the test fails instead of silently
+ * skipping, because "notification posted" is the behaviour under test.
  */
 @RunWith(AndroidJUnit4.class)
 public class RingServiceTest {
@@ -60,18 +61,23 @@ public class RingServiceTest {
         a.enabled = true;
         alarmId = (int) new AlarmRepository(db).insert(a);
 
-        grantNotificationPermissionIfPossible();
+        grantNotificationPermission();
     }
 
-    @org.junit.After
+    @After
     public void tearDown() {
         RingService.stop(ctx, alarmId);
         sleepQuietly(500);
         db.close();
     }
 
-    private void grantNotificationPermissionIfPossible() {
+    /** Tries `pm grant` as shell; fails the test if the permission is still missing. */
+    private void grantNotificationPermission() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            return;
+        }
+        if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS)
+                == PackageManager.PERMISSION_GRANTED) {
             return;
         }
         try {
@@ -84,14 +90,11 @@ public class RingServiceTest {
             }
             sleepQuietly(300);
         } catch (Exception ignored) {
-            // Fall back to Assume-guarded assertions below.
+            // asserted below
         }
-    }
-
-    private boolean notificationPermissionGranted() {
-        return Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU
-                || ContextCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS)
-                == PackageManager.PERMISSION_GRANTED;
+        assertTrue("POST_NOTIFICATIONS must be granted for this test",
+                ContextCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS)
+                        == PackageManager.PERMISSION_GRANTED);
     }
 
     private static void sleepQuietly(long millis) {
@@ -117,53 +120,61 @@ public class RingServiceTest {
         return false;
     }
 
-    private boolean hasRingNotification() {
+    private StatusBarNotification ringNotification() {
         NotificationManager nm =
                 (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
         if (nm == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
-            return false;
+            return null;
         }
         StatusBarNotification[] all = nm.getActiveNotifications();
         if (all == null) {
-            return false;
+            return null;
         }
         for (StatusBarNotification sbn : all) {
             if (sbn.getId() == NOTIFICATION_ID
                     && ctx.getPackageName().equals(sbn.getPackageName())) {
-                return true;
+                return sbn;
             }
         }
-        return false;
+        return null;
     }
 
-    @Test
-    public void startRing_promotesForegroundService_andStopsCleanly() {
+    private void startRing() {
         Intent ring = new Intent(ctx, RingService.class)
                 .setAction(RingService.ACTION_START_RING)
                 .putExtra(RingService.EXTRA_ALARM_ID, alarmId);
         ContextCompat.startForegroundService(ctx, ring);
+    }
+
+    @Test
+    public void startRing_promotesForegroundService_withFullScreenIntentAndStopAction() {
+        startRing();
 
         boolean running = false;
-        for (int i = 0; i < 50 && !running; i++) { // up to ~5s
+        StatusBarNotification sbn = null;
+        for (int i = 0; i < 50 && (sbn == null || !running); i++) { // up to ~5s
             sleepQuietly(100);
             running = ringServiceRunning();
+            sbn = ringNotification();
         }
         assertTrue("RingService must be running while ringing", running);
+        assertTrue("ringing notification must be posted", sbn != null);
 
-        if (notificationPermissionGranted()) {
-            assertTrue("ringing notification must be posted", hasRingNotification());
-        }
+        Notification n = sbn.getNotification();
+        assertTrue("full-screen intent is what shows the stop screen on the keyguard",
+                n.fullScreenIntent != null);
+        assertTrue("notification must offer a Stop action (silence without the UI)",
+                n.actions != null && n.actions.length >= 1);
+        assertEquals("notification uses the alarm category",
+                Notification.CATEGORY_ALARM, n.category);
 
         RingService.stop(ctx, alarmId);
         boolean stopped = false;
         for (int i = 0; i < 50 && !stopped; i++) {
             sleepQuietly(100);
-            stopped = !ringServiceRunning();
+            stopped = !ringServiceRunning() && ringNotification() == null;
         }
-        assertTrue("stop must shut the service down", stopped);
-        if (notificationPermissionGranted()) {
-            assertFalse("stop must remove the notification", hasRingNotification());
-        }
+        assertTrue("stop must shut the service down and remove the notification", stopped);
     }
 
     @Test
@@ -172,17 +183,10 @@ public class RingServiceTest {
                 .setAction(RingService.ACTION_START_RING)
                 .putExtra(RingService.EXTRA_ALARM_ID, -1);
         ContextCompat.startForegroundService(ctx, ring); // would kill the process on contract violation
-        sleepQuietly(800);
+        sleepQuietly(1200);
 
-        assertFalse("no ringing notification for an invalid id", hasRingNotification());
-        // Reaching this line proves the startForeground() contract was honoured.
-        assertTrue("test process survived", true);
-    }
-
-    /** Guard so a device without the permission reports a skip, not a silent pass. */
-    @Test
-    public void notificationPosting_requiresPermission() {
-        Assume.assumeTrue("needs POST_NOTIFICATIONS", notificationPermissionGranted());
-        assertTrue(true);
+        assertFalse("no ringing notification for an invalid id", ringNotification() != null);
+        // Reaching this line proves the startForeground() contract was honoured;
+        // a violation would have killed the process before the assertion ran.
     }
 }

@@ -68,8 +68,11 @@ public class RingActions {
      */
     @WorkerThread
     public void onSnoozed(Alarm alarm, long fireAtMillis, int snoozeMin) {
-        record(alarm, fireAtMillis, AlarmEvent.Type.SNOOZE, "snooze:" + snoozeMin);
-        scheduler.scheduleAt(alarm, LocalDateTime.now().plusMinutes(snoozeMin));
+        // Clamp defensively: imported/remote data could carry 0 or a huge value,
+        // which would either ring immediately or swallow the rest of the day.
+        int minutes = Math.max(1, Math.min(30, snoozeMin));
+        record(alarm, fireAtMillis, AlarmEvent.Type.SNOOZE, "snooze:" + minutes);
+        scheduler.scheduleAt(alarm, LocalDateTime.now().plusMinutes(minutes));
     }
 
     /** Holiday / rule skip while the system alarm still fired (design.md §2.2). */
@@ -92,9 +95,5 @@ public class RingActions {
             // Logging must never break the ring/stop path.
             Log.e(TAG, "failed to record event " + type + " for alarm " + alarm.id, e);
         }
-    }
-
-    static String isoNow() {
-        return LocalDateTime.now(ZoneId.systemDefault()).format(ISO);
     }
 }

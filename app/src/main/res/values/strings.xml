@@ -10,5 +10,6 @@
     <string name="ring_channel_name">闹钟响铃</string>
     <string name="ring_channel_desc">闹钟触发时的全屏提醒与铃声</string>
     <string name="ring_notification_title">闹钟响了</string>
-    <string name="ring_notification_text">点按停止或稍后提醒</string>
+    <string name="ring_notification_text">点按打开停铃页，或用下方按钮停止</string>
+    <string name="ring_fallback_text">闹钟响了，但无法启动响铃服务，请打开应用</string>
 </resources>

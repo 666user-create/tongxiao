@@ -97,9 +97,12 @@ public class AlarmScheduler {
 
     /**
      * Registers a one-off trigger at {@code when} without changing the alarm's
-     * schedule rule — used by snooze (design.md §2.2).
+     * schedule rule — used by snooze (design.md §2.2). The intent carries
+     * {@link AlarmIntents#EXTRA_FROM_SNOOZE} so the receiver does not re-apply the
+     * holiday rule to a wake-up the user explicitly requested.
      *
-     * @return epoch millis registered, or -1 when the alarm is disabled.
+     * @return epoch millis registered, or -1 when the alarm is disabled or the
+     *         requested moment is not in the future.
      */
     @AnyThread
     public long scheduleAt(Alarm alarm, java.time.LocalDateTime when) {
@@ -107,7 +110,11 @@ public class AlarmScheduler {
             return -1L;
         }
         long triggerAt = when.atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli();
-        PendingIntent operation = firePendingIntent(alarm, PendingIntent.FLAG_UPDATE_CURRENT);
+        if (triggerAt <= System.currentTimeMillis()) {
+            Log.w(TAG, "snooze target already passed for alarm " + alarm.id);
+            return -1L;
+        }
+        PendingIntent operation = firePendingIntent(alarm, PendingIntent.FLAG_UPDATE_CURRENT, true);
         PendingIntent showIntent = showPendingIntent(alarm);
         if (canScheduleExactAlarms()) {
             alarmManager.setAlarmClock(
@@ -166,10 +173,17 @@ public class AlarmScheduler {
     }
 
     private PendingIntent firePendingIntent(Alarm alarm, int extraFlags) {
+        return firePendingIntent(alarm, extraFlags, false);
+    }
+
+    private PendingIntent firePendingIntent(Alarm alarm, int extraFlags, boolean fromSnooze) {
         Intent intent = new Intent(appContext, AlarmReceiver.class)
                 .setAction(AlarmIntents.ACTION_FIRE_ALARM)
                 .putExtra(AlarmIntents.EXTRA_ALARM_ID, alarm.id)
                 .putExtra(AlarmIntents.EXTRA_ALARM_UID, alarm.uid);
+        if (fromSnooze) {
+            intent.putExtra(AlarmIntents.EXTRA_FROM_SNOOZE, true);
+        }
         return PendingIntent.getBroadcast(
                 appContext, alarm.id, intent,
                 PendingIntent.FLAG_IMMUTABLE | extraFlags);

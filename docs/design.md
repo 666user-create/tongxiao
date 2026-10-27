@@ -90,6 +90,12 @@ AlarmManager 到点
 
 **响后必须重排**：`setAlarmClock` 是一次性注册，`AlarmManager` 不会自己续期。若只依赖 §6.4 的 6h 自检，force-stop 或自检未跑到就会漏响。因此停铃路径（含静音/紧急停止）必须同步调用 `AlarmScheduler.schedule()` 计算下一次；§6.4 自检只作为兜底。
 
+**贪睡语义**：贪睡不是"改闹钟日程"，而是用同一个 requestCode 调 `setAlarmClock(now+snoozeMin)` **覆盖**当前注册——下一次常规闹钟在"最终停铃"时才重新排上。所以贪睡重响的 intent 带 `EXTRA_FROM_SNOOZE`，接收端**跳过节假日/星期判定**直接响（否则 23:55 贪睡跨零点到假日会被静默吞掉，违反 §8.1）；snoozeMin 钳制 1~30 分钟。
+
+**Android 10+ 平台限制（答辩必讲）**：后台应用禁止直接 `startActivity`，因此停铃全屏页**不能**靠 `startActivity` 拉起；可靠路径是响铃通知携带 `fullScreenIntent`，由系统在**锁屏/熄屏**时展示。亮屏解锁时用户看到的是环形通知（含"停止"action），点通知进入停铃页。这是安卓闹钟的标准交互，不是实现缺陷。
+
+**停铃入口必须闭环**：环形通知常驻"停止"action（`PendingIntent.getService`，不受后台启动限制）+ 停铃页返回键等价停铃 + 闹钟行已删除时也要先停服务再退出。三者缺一，铃声就可能无法停止。
+
 ---
 
 ## 3. 数据模型（Room，库名 `tongxiao.db`）
