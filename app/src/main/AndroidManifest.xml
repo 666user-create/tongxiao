@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- Exact alarms: SCHEDULE_EXACT_ALARM for Android 12/12L, USE_EXACT_ALARM for 13+
          (auto-granted to alarm-clock apps). Without either we fall back to inexact. -->
@@ -39,7 +40,8 @@
             android:exported="false"
             android:launchMode="singleInstance"
             android:showWhenLocked="true"
-            android:turnScreenOn="true" />
+            android:turnScreenOn="true"
+            tools:targetApi="o_mr1" />
 
         <!-- Explicit intents only (no intent-filter) => exported=false. -->
         <receiver

@@ -156,11 +156,8 @@ public class RingService extends Service {
             return;
         }
         long[] pattern = {0, 800, 600, 800, 600};
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            vibrator.vibrate(VibrationEffect.createWaveform(pattern, 0));
-        } else {
-            vibrator.vibrate(pattern, 0);
-        }
+        // minSdk 26: VibrationEffect is always available (no legacy branch).
+        vibrator.vibrate(VibrationEffect.createWaveform(pattern, 0));
     }
 
     private Notification buildNotification(int alarmIdValue) {
