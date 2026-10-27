@@ -134,10 +134,13 @@ AlarmManager 到点
 
 | 列 | 类型 | 说明 |
 |---|---|---|
-| ownerDeviceId | text FK | |
+| ownerDeviceId | text FK→group_members | |
+| **srcAlarmId** | int | **对方 alarms.id**（协议携带，见 §4 CMD_MUTE 定位）|
 | alarmLabel / timeText / repeatText | text | 展示用 |
 | enabled / ringingNow | bool | ringingNow 决定"静音"按钮可用性 |
 | syncedAt | long | |
+
+主键：(ownerDeviceId, srcAlarmId)。SYNC_PUSH 全量替换该 owner 的镜像行。
 
 **pending_requests — 待确认请求（改题目/代设闹钟）**
 
@@ -188,8 +191,8 @@ AlarmManager 到点
 |---|---|---|---|
 | HELLO | 双向 | dev, nick | 握手，验组码 |
 | BYE | 双向 | — | 优雅断开 |
-| SYNC_PUSH | 主动 | alarms:[{label,time,repeat,enabled,ringing}] | 推自己时刻表（需对方授予 bit1 可见） |
-| CMD_MUTE | 发起→执行 | alarmId | 静音响铃中闹钟，立即执行 |
+| SYNC_PUSH | 主动 | alarms:[{id,label,time,repeat,enabled,ringing}] | 推自己时刻表，id=本机 alarms.id（需对方授予 bit1 可见） |
+| CMD_MUTE | 发起→执行 | ownerDev, alarmId | 静音响铃中闹钟（alarmId 来自 SYNC_PUSH），立即执行 |
 | CMD_ACK | 执行→发起 | ok, reason | 回执 |
 | NOTIFY_OP | 执行→发起 | what, at | 操作回执通知（"你静音了小李的 06:40"） |
 | SET_REQUEST | 发起 | reqId, type, payload | 改题目/代设/删闹钟申请 |

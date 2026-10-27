@@ -3,26 +3,47 @@ plugins {
 }
 
 android {
-    namespace 'com.course.tongxiao'
-    compileSdk 36
+    namespace = 'com.course.tongxiao'
+    compileSdk = 36
 
     defaultConfig {
-        applicationId 'com.course.tongxiao'
-        minSdk 26
-        targetSdk 36
-        versionCode 1
-        versionName '0.1'
+        applicationId = 'com.course.tongxiao'
+        minSdk = 26
+        targetSdk = 36
+        versionCode = 1
+        versionName = '0.1'
+        testInstrumentationRunner = 'androidx.test.runner.AndroidJUnitRunner'
+        // Room schema JSON is committed under schemas/ (G5: field-by-field review).
+        javaCompileOptions {
+            annotationProcessorOptions {
+                arguments += ['room.schemaLocation': "$projectDir/schemas".toString()]
+            }
+        }
     }
 
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    // Instrumentation tests also read the schema asset for validation.
+    sourceSets {
+        androidTest.assets.srcDirs += files("$projectDir/schemas".toString())
     }
 }
 
 dependencies {
-    // Step 1.1 skeleton only: theme + base activity. Room/WorkManager/ViewModel
-    // enter at their own steps (1.2 / 6.4 / 3.1) per plan.md.
     implementation 'com.google.android.material:material:1.14.0'
     implementation 'androidx.appcompat:appcompat:1.8.0'
+
+    // Step 1.2: Room (entities/DAOs) + LiveData support in DAOs.
+    implementation 'androidx.room:room-runtime:2.8.5'
+    annotationProcessor 'androidx.room:room-compiler:2.8.5'
+    implementation 'androidx.lifecycle:lifecycle-livedata:2.11.0'
+
+    // Step 1.2 G2: in-memory DB tests on device/emulator.
+    androidTestImplementation 'androidx.test.ext:junit:1.3.0'
+    androidTestImplementation 'androidx.test:runner:1.7.0'
+    androidTestImplementation 'androidx.test:core:1.7.0'
+    androidTestImplementation 'androidx.room:room-testing:2.8.5'
 }
