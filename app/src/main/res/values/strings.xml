@@ -2,4 +2,13 @@
 <resources>
     <string name="app_name">同晓</string>
     <string name="hello_skeleton">同晓 · 工程骨架 OK</string>
+
+    <string name="alarm_default_label">闹钟</string>
+    <string name="stop_ring">停止</string>
+    <string name="snooze">稍后提醒</string>
+
+    <string name="ring_channel_name">闹钟响铃</string>
+    <string name="ring_channel_desc">闹钟触发时的全屏提醒与铃声</string>
+    <string name="ring_notification_title">闹钟响了</string>
+    <string name="ring_notification_text">点按停止或稍后提醒</string>
 </resources>

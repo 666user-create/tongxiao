@@ -95,6 +95,29 @@ public class AlarmScheduler {
         return triggerAt;
     }
 
+    /**
+     * Registers a one-off trigger at {@code when} without changing the alarm's
+     * schedule rule — used by snooze (design.md §2.2).
+     *
+     * @return epoch millis registered, or -1 when the alarm is disabled.
+     */
+    @AnyThread
+    public long scheduleAt(Alarm alarm, java.time.LocalDateTime when) {
+        if (!alarm.enabled) {
+            return -1L;
+        }
+        long triggerAt = when.atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli();
+        PendingIntent operation = firePendingIntent(alarm, PendingIntent.FLAG_UPDATE_CURRENT);
+        PendingIntent showIntent = showPendingIntent(alarm);
+        if (canScheduleExactAlarms()) {
+            alarmManager.setAlarmClock(
+                    new AlarmManager.AlarmClockInfo(triggerAt, showIntent), operation);
+        } else {
+            alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, operation);
+        }
+        return triggerAt;
+    }
+
     @AnyThread
     public void cancel(Alarm alarm) {
         PendingIntent operation = firePendingIntent(alarm, PendingIntent.FLAG_NO_CREATE);
