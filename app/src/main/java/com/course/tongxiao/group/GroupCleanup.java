@@ -16,6 +16,11 @@ import java.util.List;
  * schedule, and a leftover pending request would pop a confirmation for somebody
  * who is no longer in the group.
  *
+ * <p>The cached leaderboard snapshots ({@link PeerStatsStore}, prefs) are removed
+ * in the same call. Prefs are not part of the DB transaction, so a crash in between
+ * can leave a stale ranking row — harmless and self-healing (the device only shows
+ * that member while offline, and the next leave/cleanup pass removes it).
+ *
  * <p>This lives in the group package because §3.3's rule is a group rule, and it
  * uses {@link TongxiaoDb#runInTransaction} directly instead of adding DAO calls to
  * {@code data/repository} (that file is owned elsewhere).
@@ -30,7 +35,8 @@ public final class GroupCleanup {
      *
      * @return false when the device was not a member (nothing to do)
      */
-    public static boolean removeMember(@NonNull TongxiaoDb db, @NonNull String deviceId) {
+    public static boolean removeMember(@NonNull TongxiaoDb db, @NonNull PeerStatsStore peerStats,
+                                       @NonNull String deviceId) {
         GroupMember member = db.groupMemberDao().getByDeviceId(deviceId);
         if (member == null) {
             return false;
@@ -40,21 +46,19 @@ public final class GroupCleanup {
             db.remoteAlarmDao().clearOwner(deviceId);
             db.pendingRequestDao().deleteBySender(deviceId);
         });
+        peerStats.remove(deviceId);
         return true;
     }
 
     /**
-     * Leaves the group entirely: every member row plus its mirror and pending
-     * requests. The group code in {@link GroupIdentity} is the caller's business
-     * (the UI clears it), because prefs are not part of the DB transaction.
+     * Leaves the group entirely: every member row plus its mirror, pending requests
+     * and cached leaderboard snapshot.
      *
      * @return number of members removed
      */
-    public static int removeAllMembers(@NonNull TongxiaoDb db) {
+    public static int removeAllMembers(@NonNull TongxiaoDb db,
+                                       @NonNull PeerStatsStore peerStats) {
         List<GroupMember> members = db.groupMemberDao().getAll();
-        if (members.isEmpty()) {
-            return 0;
-        }
         db.runInTransaction(() -> {
             for (GroupMember member : members) {
                 db.groupMemberDao().delete(member);
@@ -62,6 +66,7 @@ public final class GroupCleanup {
                 db.pendingRequestDao().deleteBySender(member.deviceId);
             }
         });
+        peerStats.clearAll();
         return members.size();
     }
 }

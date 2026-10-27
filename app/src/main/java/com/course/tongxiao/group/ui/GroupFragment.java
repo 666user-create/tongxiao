@@ -26,7 +26,9 @@ import com.course.tongxiao.group.AlarmGateway;
 import com.course.tongxiao.group.GroupCleanup;
 import com.course.tongxiao.group.GroupIdentity;
 import com.course.tongxiao.group.GroupManager;
+import com.course.tongxiao.group.GroupSession;
 import com.course.tongxiao.group.GroupWiring;
+import com.course.tongxiao.group.PeerStatsStore;
 import com.course.tongxiao.group.net.NsdDiscovery;
 import com.course.tongxiao.group.protocol.GroupMessage;
 import com.course.tongxiao.group.protocol.GroupProtocol;
@@ -73,6 +75,7 @@ public class GroupFragment extends Fragment {
     private TongxiaoDb db;
     private GroupManager manager;
     private NsdDiscovery discovery;
+    private PeerStatsStore peerStats;
     private ExecutorService io;
 
     private final Map<String, String> nickByDevice = new HashMap<>();
@@ -110,9 +113,10 @@ public class GroupFragment extends Fragment {
         Context appContext = requireContext().getApplicationContext();
         identity = new GroupIdentity(appContext);
         db = TongxiaoDb.get(appContext);
+        peerStats = new PeerStatsStore(appContext);
         AlarmGateway gateway = GroupWiring.gatewayOrNull();
         manager = new GroupManager(db, new SettingsStore(appContext), identity,
-                gateway == null ? new UnavailableGateway() : gateway);
+                gateway == null ? new UnavailableGateway() : gateway, peerStats);
         discovery = new NsdDiscovery(appContext);
 
         joinCard = view.findViewById(R.id.group_join_card);
@@ -195,7 +199,8 @@ public class GroupFragment extends Fragment {
         identity.setGroupCode("");
         stopServices();
         submitIo(() -> {
-            int removed = GroupCleanup.removeAllMembers(db); // §3.3 transactional cleanup
+            // §3.3 transactional cleanup + the cached leaderboard snapshots.
+            int removed = GroupCleanup.removeAllMembers(db, peerStats);
             Log.i(TAG, "left the group, removed " + removed + " member row(s)");
         });
         renderGroupState();
@@ -211,6 +216,9 @@ public class GroupFragment extends Fragment {
 
     private void startServices() {
         renderGroupState();
+        // Publish the live manager so other screens (stats ranking) can broadcast
+        // their snapshot without owning the group lifecycle (see GroupSession).
+        GroupSession.attach(manager);
         if (identity.groupCode().isEmpty()) {
             return;
         }
@@ -227,6 +235,7 @@ public class GroupFragment extends Fragment {
 
     private void stopServices() {
         discovery.stop();
+        GroupSession.detach(manager);
         submitIo(manager::stop);
     }
 

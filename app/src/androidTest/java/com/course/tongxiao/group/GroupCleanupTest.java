@@ -7,6 +7,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import android.content.Context;
+import android.content.SharedPreferences;
 
 import androidx.room.Room;
 import androidx.test.core.app.ApplicationProvider;
@@ -17,6 +18,8 @@ import com.course.tongxiao.data.entity.GroupMember;
 import com.course.tongxiao.data.entity.PendingRequest;
 import com.course.tongxiao.data.entity.RemoteAlarm;
 
+import org.json.JSONException;
+import org.json.JSONObject;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -33,11 +36,16 @@ public class GroupCleanupTest {
     private static final String MEMBER_B = "member-b";
 
     private TongxiaoDb db;
+    private PeerStatsStore peerStats;
 
     @Before
     public void setUp() {
-        db = Room.inMemoryDatabaseBuilder(
-                ApplicationProvider.getApplicationContext(), TongxiaoDb.class).build();
+        Context context = ApplicationProvider.getApplicationContext();
+        db = Room.inMemoryDatabaseBuilder(context, TongxiaoDb.class).build();
+        SharedPreferences prefs = context.getSharedPreferences(
+                "test_group_cleanup_stats", Context.MODE_PRIVATE);
+        prefs.edit().clear().commit();
+        peerStats = new PeerStatsStore(prefs);
     }
 
     @After
@@ -53,23 +61,29 @@ public class GroupCleanupTest {
         seedMirror(MEMBER_B, "uid-2");
         seedPending("req-a", MEMBER_A);
         seedPending("req-b", MEMBER_B);
+        seedSnapshot(MEMBER_A);
+        seedSnapshot(MEMBER_B);
 
-        assertTrue(GroupCleanup.removeMember(db, MEMBER_A));
+        assertTrue(GroupCleanup.removeMember(db, peerStats, MEMBER_A));
 
         assertNull("member row is gone", db.groupMemberDao().getByDeviceId(MEMBER_A));
         assertTrue("mirror of the departed member is gone",
                 db.remoteAlarmDao().getAll(MEMBER_A).isEmpty());
         assertNull("their pending request is gone",
                 db.pendingRequestDao().getByReqId("req-a"));
+        assertTrue("their leaderboard snapshot is gone",
+                peerStats.all().stream().noneMatch(s -> s.deviceId.equals(MEMBER_A)));
 
         assertNotNull("the other member must survive", db.groupMemberDao().getByDeviceId(MEMBER_B));
         assertFalse(db.remoteAlarmDao().getAll(MEMBER_B).isEmpty());
         assertNotNull(db.pendingRequestDao().getByReqId("req-b"));
+        assertTrue("the other member's snapshot survives",
+                peerStats.all().stream().anyMatch(s -> s.deviceId.equals(MEMBER_B)));
     }
 
     @Test
     public void removeMember_unknownDevice_isANoOp() {
-        assertFalse(GroupCleanup.removeMember(db, "nobody"));
+        assertFalse(GroupCleanup.removeMember(db, peerStats, "nobody"));
     }
 
     @Test
@@ -81,17 +95,32 @@ public class GroupCleanupTest {
         seedPending("req-a", MEMBER_A);
         seedPending("req-b", MEMBER_B);
 
-        assertEquals(2, GroupCleanup.removeAllMembers(db));
+        assertEquals(2, GroupCleanup.removeAllMembers(db, peerStats));
 
         assertTrue(db.groupMemberDao().getAll().isEmpty());
         assertTrue(db.remoteAlarmDao().getAll(MEMBER_A).isEmpty());
         assertTrue(db.remoteAlarmDao().getAll(MEMBER_B).isEmpty());
         assertEquals(0, db.pendingRequestDao().getByStatus(PendingRequest.Status.PENDING).size());
+        assertTrue("leaving the group clears the whole ranking cache",
+                peerStats.all().isEmpty());
     }
 
     @Test
     public void removeAllMembers_withNoMembers_isANoOp() {
-        assertEquals(0, GroupCleanup.removeAllMembers(db));
+        assertEquals(0, GroupCleanup.removeAllMembers(db, peerStats));
+    }
+
+    private void seedSnapshot(String deviceId) {
+        JSONObject payload = new JSONObject();
+        try {
+            payload.put("deviceId", deviceId);
+            payload.put("nick", deviceId);
+            payload.put("medianStopMinute", 445);
+            payload.put("sentAt", System.currentTimeMillis());
+        } catch (JSONException e) {
+            throw new AssertionError(e);
+        }
+        assertNotNull(peerStats.normalizeAndStore(payload));
     }
 
     private void seedMember(String deviceId) {

@@ -53,6 +53,10 @@ public class GroupManagerTest {
     private GroupIdentity identityB;
     private GroupManager managerA;
     private GroupManager managerB;
+    private PeerStatsStore statsA;
+    private PeerStatsStore statsB;
+    private SettingsStore settingsA;
+    private SettingsStore settingsB;
     private FakeGateway gatewayA;
     private FakeGateway gatewayB;
 
@@ -75,16 +79,20 @@ public class GroupManagerTest {
         gatewayA = new FakeGateway();
         gatewayB = new FakeGateway();
 
-        managerA = new GroupManager(dbA, settings(ctx, "test_group_manager_settings_a"),
-                identityA, gatewayA, fastConfig());
-        managerB = new GroupManager(dbB, settings(ctx, "test_group_manager_settings_b"),
-                identityB, gatewayB, fastConfig());
+        statsA = statsStore(ctx, "test_group_manager_stats_a");
+        statsB = statsStore(ctx, "test_group_manager_stats_b");
+        settingsA = settings(ctx, "test_group_manager_settings_a");
+        settingsB = settings(ctx, "test_group_manager_settings_b");
+
+        managerA = new GroupManager(dbA, settingsA, identityA, gatewayA, statsA, fastConfig());
+        managerB = new GroupManager(dbB, settingsB, identityB, gatewayB, statsB, fastConfig());
         managerA.setObserver((deviceId, message) -> inboundAtA.add(message));
         managerB.setObserver((deviceId, message) -> inboundAtB.add(message));
     }
 
     @After
     public void tearDown() {
+        GroupSession.detach(managerA);
         managerA.stop();
         managerB.stop();
         dbA.close();
@@ -181,6 +189,51 @@ public class GroupManagerTest {
                 () -> !dbB.remoteAlarmDao().getAll(identityA.deviceId()).isEmpty());
     }
 
+    @Test
+    public void broadcastStats_overTheLink_reachesThePeerRankingCache() {
+        handshake();
+
+        JSONObject snapshot = new JSONObject();
+        try {
+            snapshot.put(GroupMessage.FIELD_STATS_MEDIAN_STOP, 445);
+            snapshot.put(GroupMessage.FIELD_STATS_DAYS, 7);
+            snapshot.put(GroupMessage.FIELD_STATS_SNOOZE, 4);
+            snapshot.put(GroupMessage.FIELD_STATS_MUTED, 1);
+            // deviceId/nick/sentAt are filled in by the manager, not the UI.
+            snapshot.put(GroupMessage.FIELD_STATS_DEVICE_ID, "spoofed-identity");
+        } catch (JSONException e) {
+            throw new AssertionError(e);
+        }
+
+        TestAwait.until("A reached its peer", 5_000L, () -> managerA.broadcastStats(snapshot) >= 1);
+        TestAwait.until("B stored A's snapshot", 5_000L, () -> !statsB.all().isEmpty());
+
+        PeerSnapshot row = statsB.all().get(0);
+        assertEquals("identity is taken from the authenticated link, not the payload",
+                identityA.deviceId(), row.deviceId);
+        assertEquals(445, row.medianStopMinute);
+        assertEquals(0, managerB.coordinator().droppedStats());
+    }
+
+    @Test
+    public void broadcastStats_whenThePeerHasTheMasterSwitchOff_isDroppedThere() {
+        handshake();
+        // B refuses all remote traffic; the snapshot must not land in its cache.
+        settingsB.setGroupMasterSwitchOn(false);
+
+        JSONObject snapshot = new JSONObject();
+        try {
+            snapshot.put(GroupMessage.FIELD_STATS_MEDIAN_STOP, 480);
+        } catch (JSONException e) {
+            throw new AssertionError(e);
+        }
+        managerA.broadcastStats(snapshot);
+
+        TestAwait.until("B counted the dropped snapshot", 5_000L,
+                () -> managerB.coordinator().droppedStats() > 0);
+        assertTrue(statsB.all().isEmpty());
+    }
+
     // ---- helpers ----
 
     private void handshake() {
@@ -212,6 +265,12 @@ public class GroupManagerTest {
         SharedPreferences prefs = ctx.getSharedPreferences(prefsName, Context.MODE_PRIVATE);
         prefs.edit().clear().commit();
         return new SettingsStore(prefs);
+    }
+
+    private static PeerStatsStore statsStore(Context ctx, String prefsName) {
+        SharedPreferences prefs = ctx.getSharedPreferences(prefsName, Context.MODE_PRIVATE);
+        prefs.edit().clear().commit();
+        return new PeerStatsStore(prefs);
     }
 
     @Nullable

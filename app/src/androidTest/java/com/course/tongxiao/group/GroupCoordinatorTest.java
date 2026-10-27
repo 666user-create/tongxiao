@@ -53,6 +53,7 @@ public class GroupCoordinatorTest {
     private TongxiaoDb db;
     private SettingsStore settings;
     private GroupIdentity identity;
+    private PeerStatsStore peerStats;
     private FakeGateway gateway;
     private GroupCoordinator coordinator;
     private final List<GroupMessage> replies =
@@ -73,8 +74,13 @@ public class GroupCoordinatorTest {
         identity = new GroupIdentity(identityPrefs);
         identity.setGroupCode(GROUP_CODE);
 
+        SharedPreferences statsPrefs = ctx.getSharedPreferences(
+                "test_coordinator_stats", Context.MODE_PRIVATE);
+        statsPrefs.edit().clear().commit();
+        peerStats = new PeerStatsStore(statsPrefs);
+
         gateway = new FakeGateway();
-        coordinator = new GroupCoordinator(db, settings, identity, gateway);
+        coordinator = new GroupCoordinator(db, settings, identity, gateway, peerStats);
     }
 
     @After
@@ -472,6 +478,75 @@ public class GroupCoordinatorTest {
                 db.pendingRequestDao().getByReqId("req-overdue").status);
     }
 
+    // ---- STATS_PUSH (offline-first leaderboard) ----
+
+    @Test
+    public void statsPush_isStoredWithoutAnyPermissionBit() {
+        enrolPeer(); // default grant = MUTE|SEE only, no PERM_SET
+        long sentAt = System.currentTimeMillis();
+
+        command(GroupMessage.statsPush(statsPayload(445, 12, 3, sentAt)));
+
+        List<PeerSnapshot> stored = peerStats.all();
+        assertEquals(1, stored.size());
+        assertEquals(PEER, stored.get(0).deviceId);
+        assertEquals("小李", stored.get(0).nick);
+        assertEquals(445, stored.get(0).medianStopMinute);
+        assertEquals(12, stored.get(0).snoozeCount);
+        assertEquals(3, stored.get(0).mutedCount);
+        assertEquals(sentAt, stored.get(0).sentAt);
+        assertEquals("an accepted snapshot is not a drop", 0, coordinator.droppedStats());
+    }
+
+    @Test
+    public void statsPush_whenMasterSwitchOff_isDroppedAndNotStored() {
+        enrolPeer();
+        settings.setGroupMasterSwitchOn(false);
+
+        command(GroupMessage.statsPush(statsPayload(445, 12, 3, System.currentTimeMillis())));
+
+        assertTrue("master off means no remote traffic at all", peerStats.all().isEmpty());
+        assertEquals(1, coordinator.droppedStats());
+    }
+
+    @Test
+    public void statsPush_withImpossibleWakeUpMinute_isDroppedWithACount() {
+        enrolPeer();
+
+        // 1500 minutes is not a clock reading: the whole row is refused.
+        command(GroupMessage.statsPush(statsPayload(1500, 12, 3, System.currentTimeMillis())));
+
+        assertTrue(peerStats.all().isEmpty());
+        assertEquals(1, coordinator.droppedStats());
+    }
+
+    @Test
+    public void statsPush_claimedDeviceId_isOverriddenWithTheAuthenticatedSender() throws Exception {
+        enrolPeer();
+
+        // A member tries to write a row into somebody else's name.
+        JSONObject payload = statsPayload(445, 12, 3, System.currentTimeMillis());
+        payload.put(GroupMessage.FIELD_STATS_DEVICE_ID, "victim-device");
+
+        command(GroupMessage.statsPush(payload));
+
+        List<PeerSnapshot> stored = peerStats.all();
+        assertEquals(1, stored.size());
+        assertEquals("the row belongs to the peer that actually sent it",
+                PEER, stored.get(0).deviceId);
+    }
+
+    @Test
+    public void statsPush_fromANonMember_isDropped() {
+        GroupMessage push = GroupMessage.statsPush(statsPayload(445, 12, 3, System.currentTimeMillis()));
+
+        coordinator.onCommand("stranger", push, replies::add);
+
+        assertTrue("only group members may publish into my ranking cache",
+                peerStats.all().isEmpty());
+        assertEquals(1, coordinator.droppedStats());
+    }
+
     // ---- outbound SYNC_PUSH and the master switch ----
 
     @Test
@@ -550,8 +625,20 @@ public class GroupCoordinatorTest {
         assertEquals(expectedReason, ack.string(GroupMessage.FIELD_REASON, ""));
     }
 
-    private static PendingRequest pendingRow(String reqId, long expireAt) {
-        PendingRequest request = new PendingRequest();
+    /** Leaderboard snapshot payload as the stats page would build it. */
+    private static JSONObject statsPayload(int medianStopMinute, int snoozeCount,
+                                           int mutedCount, long sentAt) {
+        return json(
+                GroupMessage.FIELD_STATS_DEVICE_ID, PEER,
+                GroupMessage.FIELD_NICK, "小李",
+                GroupMessage.FIELD_STATS_DAYS, 7,
+                GroupMessage.FIELD_STATS_MEDIAN_STOP, medianStopMinute,
+                GroupMessage.FIELD_STATS_SNOOZE, snoozeCount,
+                GroupMessage.FIELD_STATS_MUTED, mutedCount,
+                GroupMessage.FIELD_STATS_SENT_AT, sentAt);
+    }
+
+    private static PendingRequest pendingRow(String reqId, long expireAt) {        PendingRequest request = new PendingRequest();
         request.reqId = reqId;
         request.fromDeviceId = PEER;
         request.type = PendingRequest.Kind.REMOVE_ALARM;

@@ -1,13 +1,13 @@
 # 同晓 · 测试报告
 
 > 生成方式：本文件由用户在模拟器 `Pixel_7_API_36` 上实跑的 `gradlew connectedDebugAndroidTest` 结果与各里程碑关卡记录汇总。
-> 状态：**已完成**（最终全量运行：279 tests / 0 failed / 0 skipped，模拟器 Pixel_7_API_36）
+> 状态：**已完成**（最终全量运行：305 tests / 0 failed / 0 skipped，模拟器 Pixel_7_API_36）
 
 ## 1. 结论速览
 
 | 项目 | 结果 |
 |---|---|
-| 单元/集成测试（instrumentation） | **279 tests / 0 failed / 0 errors / 0 skipped** |
+| 单元/集成测试（instrumentation） | **305 tests / 0 failed / 0 errors / 0 skipped** |
 | 构建（G1，含 lint） | `BUILD SUCCESSFUL`，lint **0 error**，仅余 2 条已知提示 |
 | 手动验证（G5） | 保存落库、滚轮时间选择、响铃全链路、Provider 只读、双机互助（见 §4） |
 
@@ -55,6 +55,7 @@
 | `StatsAggregatorTest` | 8 | 起床趋势、贪睡榜、被静音榜、空数据 |
 | `SelfCheckWorkerTest` | 5 | 缺注册补排、周期任务注册 |
 | `AlarmProviderTest` | 6 | 只读查询、写拒绝、未知路径 |
+| `PeerStatsStoreTest`(15) `GroupSessionTest`(4) | 19+ | 离线榜单快照：乱序旧包不覆盖、24h stale 仍显示、身份以链路为准、退组清理 |
 | `RegionCatalogTest`(25) `RegionPickerDialogTest`(5) `RegionWheelControllerTest`(7) | 37 | 滚轮级联与安全性（含"省列表变短导致越界"崩溃回归）、 三级行政区目录（34/365/3094，含港澳台）、坏 JSON 降级、直辖市/特区折叠、无区县市隐藏第三轮、滚轮回填（两段路径） |
 | `MessageCodecTest`(11) `GroupProtocolTest`(7) `RequestPayloadsTest`(7) `PeerLinkTest`(6) `GroupManagerTest`(6) `GroupCoordinatorTest`(28) `GroupCleanupTest`(4) `NsdDiscoveryTest`(4) `GroupIdentityTest`(3) `GroupTabTest`(2) | 78 | 半包/粘包/超长/未知类型、HELLO 握手、越权拒绝、待确认请求生命周期、退组清理、宿舍页 tab 接线 |
 

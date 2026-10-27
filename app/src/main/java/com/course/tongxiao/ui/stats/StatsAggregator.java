@@ -7,6 +7,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -169,5 +170,68 @@ public final class StatsAggregator {
     public static boolean isRemoteMute(String meta) {
         return meta != null
                 && meta.toLowerCase(Locale.ROOT).contains(REMOTE_META_MARKER);
+    }
+
+    // ---- dorm leaderboard snapshot (design.md §7 ⑥) ----
+
+    /**
+     * Everything the dorm leaderboard needs to know about this device, as a few
+     * small numbers. The leaderboard is offline-first: peers exchange these
+     * snapshots when they happen to be connected, so a dropped Wi-Fi link costs
+     * freshness, never the feature.
+     */
+    public static final class PeerSummary {
+        public final int days;
+        public final int medianStopMinuteOfDay;
+        public final int snoozeCount;
+        public final int mutedCount;
+
+        public PeerSummary(int days, int medianStopMinuteOfDay, int snoozeCount, int mutedCount) {
+            this.days = days;
+            this.medianStopMinuteOfDay = medianStopMinuteOfDay;
+            this.snoozeCount = snoozeCount;
+            this.mutedCount = mutedCount;
+        }
+
+        @Override
+        public String toString() {
+            return "PeerSummary{days=" + days + ", median=" + medianStopMinuteOfDay
+                    + ", snooze=" + snoozeCount + ", muted=" + mutedCount + '}';
+        }
+    }
+
+    /**
+     * @param windowDays how many days back to summarise (the last N days of the trend)
+     * @return median wake-up time and counters over the window; days = number of
+     *         days that actually have a wake-up in that window
+     */
+    public static PeerSummary summarizeForPeers(List<AlarmEvent> events, LocalDate today,
+                                                int windowDays) {
+        Stats stats = aggregate(events, today);
+        LocalDate from = today.minusDays(Math.max(1, windowDays) - 1L);
+        List<Integer> minutes = new ArrayList<>();
+        for (WakePoint point : stats.trend) {
+            if (!point.date.isBefore(from) && !point.date.isAfter(today)) {
+                minutes.add(point.minuteOfDay);
+            }
+        }
+        int median = 0;
+        if (!minutes.isEmpty()) {
+            Collections.sort(minutes);
+            int middle = minutes.size() / 2;
+            median = minutes.size() % 2 == 1
+                    ? minutes.get(middle)
+                    : (minutes.get(middle - 1) + minutes.get(middle)) / 2;
+        }
+
+        int snooze = 0;
+        if (events != null) {
+            for (AlarmEvent event : events) {
+                if (event != null && event.type == AlarmEvent.Type.SNOOZE) {
+                    snooze++;
+                }
+            }
+        }
+        return new PeerSummary(minutes.size(), median, snooze, stats.remoteMutedCount);
     }
 }

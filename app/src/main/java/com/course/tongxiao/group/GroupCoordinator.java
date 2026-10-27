@@ -21,6 +21,7 @@ import org.json.JSONObject;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Receiver-side protocol policy of the dorm group (design.md §3.2, §4).
@@ -75,13 +76,23 @@ public class GroupCoordinator {
     private final SettingsStore settings;
     private final GroupIdentity identity;
     private final AlarmGateway gateway;
+    private final PeerStatsStore peerStats;
+    /** STATS_PUSH packets that were not stored (invalid, unknown sender, master off). */
+    private final AtomicInteger droppedStats = new AtomicInteger();
 
     public GroupCoordinator(@NonNull TongxiaoDb db, @NonNull SettingsStore settings,
-                            @NonNull GroupIdentity identity, @NonNull AlarmGateway gateway) {
+                            @NonNull GroupIdentity identity, @NonNull AlarmGateway gateway,
+                            @NonNull PeerStatsStore peerStats) {
         this.db = db;
         this.settings = settings;
         this.identity = identity;
         this.gateway = gateway;
+        this.peerStats = peerStats;
+    }
+
+    /** Test/observability hook: how many STATS_PUSH packets were thrown away. */
+    public int droppedStats() {
+        return droppedStats.get();
     }
 
     // ---- handshake ----
@@ -155,6 +166,9 @@ public class GroupCoordinator {
                 break;
             case SET_REQUEST:
                 handleSetRequest(senderDeviceId, message, reply);
+                break;
+            case STATS_PUSH:
+                handleStatsPush(senderDeviceId, message);
                 break;
             default:
                 break;
@@ -301,6 +315,53 @@ public class GroupCoordinator {
             return;
         }
         ack(reply, true, null);
+    }
+
+    /**
+     * STATS_PUSH: a peer broadcasting its own leaderboard snapshot.
+     *
+     * <p>No permission bit is required — this is read-only hall information that any
+     * member of the group may publish about itself (design.md §3.2 only guards
+     * operations that touch <em>my</em> alarms). Two rules still apply:
+     * <ul>
+     *   <li>the settings-page master switch off means "no remote traffic at all", so
+     *       the packet is dropped like every other command;</li>
+     *   <li>the claimed identity is overwritten with the authenticated sender, so one
+     *       member cannot forge another member's ranking row (design.md §8.2).</li>
+     * </ul>
+     * Nothing is acknowledged: a broadcast is best-effort by design — the next
+     * snapshot heals the gap (offline-first / eventual consistency).
+     */
+    private void handleStatsPush(@NonNull String sender, @NonNull GroupMessage message) {
+        if (!settings.isGroupMasterSwitchOn()) {
+            droppedStats.incrementAndGet();
+            return;
+        }
+        GroupMember member = db.groupMemberDao().getByDeviceId(sender);
+        if (member == null) {
+            // Only members of my group may write into my leaderboard cache.
+            droppedStats.incrementAndGet();
+            return;
+        }
+        JSONObject payload = message.object(GroupMessage.FIELD_PAYLOAD);
+        if (payload == null) {
+            droppedStats.incrementAndGet();
+            return;
+        }
+        try {
+            JSONObject trusted = new JSONObject(payload.toString());
+            trusted.put(GroupMessage.FIELD_STATS_DEVICE_ID, sender);
+            if (RequestPayloads.trim(
+                    trusted.optString(GroupMessage.FIELD_NICK, ""), MAX_NICK_LENGTH).isEmpty()) {
+                trusted.put(GroupMessage.FIELD_NICK, member.nick);
+            }
+            if (peerStats.normalizeAndStore(trusted) == null) {
+                droppedStats.incrementAndGet();
+            }
+        } catch (JSONException broken) {
+            Log.w(TAG, "unreadable STATS_PUSH from " + sender, broken);
+            droppedStats.incrementAndGet();
+        }
     }
 
     // ---- pending requests (design.md §3.1/§5.5) ----

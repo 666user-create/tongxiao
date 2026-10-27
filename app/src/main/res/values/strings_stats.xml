@@ -17,4 +17,20 @@
     <string name="stats_remote_title">被舍友静音</string>
     <string name="stats_remote_count">%1$d 次</string>
     <string name="stats_remote_helper">舍友远程静音都会留痕，这里统计最近 14 天被静音的次数</string>
+
+    <!-- Dorm leaderboard: offline-first, shows snapshots + their age, never hides
+         a peer just because the Wi-Fi dropped. -->
+    <string name="stats_leaderboard_title">宿舍榜单</string>
+    <string name="stats_leaderboard_empty_room">还没加入宿舍组 · 加入后舍友的起床时间会出现在这里</string>
+    <string name="stats_leaderboard_hint">暂无舍友数据 · 连上同一 Wi-Fi 后会自动同步</string>
+    <string name="stats_leaderboard_status">%1$d 位舍友 · 最近同步 %2$s</string>
+    <string name="stats_leaderboard_status_stale">%1$d 位舍友 · 最近同步 %2$s（%3$d 位离线较久）</string>
+    <string name="stats_leaderboard_row">%1$s · 平均 %2$s</string>
+    <string name="stats_leaderboard_row_detail">贪睡 %1$d 次 · 被静音 %2$d 次 · %3$s</string>
+    <string name="stats_leaderboard_me">我</string>
+    <string name="stats_leaderboard_no_wake">暂无记录</string>
+    <string name="stats_time_just_now">刚刚</string>
+    <string name="stats_time_minutes">%1$d 分钟前</string>
+    <string name="stats_time_hours">%1$d 小时前</string>
+    <string name="stats_time_days">%1$d 天前</string>
 </resources>

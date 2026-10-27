@@ -17,6 +17,7 @@ import com.course.tongxiao.MainActivity;
 import com.course.tongxiao.R;
 import com.course.tongxiao.group.GroupCleanup;
 import com.course.tongxiao.group.GroupIdentity;
+import com.course.tongxiao.group.PeerStatsStore;
 import com.course.tongxiao.group.protocol.GroupProtocol;
 import com.course.tongxiao.data.TongxiaoDb;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
@@ -50,7 +51,7 @@ public class GroupTabTest {
 
     @After
     public void tearDown() {
-        GroupCleanup.removeAllMembers(TongxiaoDb.get(ctx));
+        GroupCleanup.removeAllMembers(TongxiaoDb.get(ctx), new PeerStatsStore(ctx));
         identity.setGroupCode(originalGroupCode);
     }
 

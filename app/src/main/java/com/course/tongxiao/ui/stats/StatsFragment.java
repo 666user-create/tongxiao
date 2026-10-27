@@ -6,6 +6,7 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -41,6 +42,11 @@ public class StatsFragment extends Fragment {
 
     private static final String TAG = "StatsFragment";
 
+    /** Leaderboard window: one week of wake-ups is enough to rank people. */
+    private static final int LEADERBOARD_WINDOW_DAYS = 7;
+    /** Best-effort broadcast cadence while this screen is visible. */
+    private static final long LEADERBOARD_BROADCAST_INTERVAL_MS = 5L * 60 * 1000;
+
     private final TextView[] snoozeRows = new TextView[StatsAggregator.SNOOZE_TOP_N];
 
     private ExecutorService worker;
@@ -48,6 +54,12 @@ public class StatsFragment extends Fragment {
     private TextView trendCaption;
     private TextView snoozeEmpty;
     private TextView remoteCount;
+    private TextView leaderboardStatus;
+    private LinearLayout leaderboardRows;
+    private TextView leaderboardEmpty;
+
+    /** Broadcasts at most every 5 minutes: snapshots are best-effort, not chatty. */
+    private long lastBroadcastAt;
 
     @Nullable
     @Override
@@ -66,6 +78,9 @@ public class StatsFragment extends Fragment {
         snoozeRows[0] = view.findViewById(R.id.stats_snooze_row_1);
         snoozeRows[1] = view.findViewById(R.id.stats_snooze_row_2);
         snoozeRows[2] = view.findViewById(R.id.stats_snooze_row_3);
+        leaderboardStatus = view.findViewById(R.id.stats_leaderboard_status);
+        leaderboardRows = view.findViewById(R.id.stats_leaderboard_rows);
+        leaderboardEmpty = view.findViewById(R.id.stats_leaderboard_empty);
 
         // Load as soon as the view exists: a host can add this fragment while the
         // activity is only STARTED (multi-window, or a tab host that caps the
@@ -122,8 +137,18 @@ public class StatsFragment extends Fragment {
                 activity.runOnUiThread(() -> {
                     if (isAdded() && getView() != null) {
                         render(stats, labels, today);
+                        renderLeaderboard(appContext, events, today);
                     }
                 });
+
+                // Offline-first leaderboard: publish our own summary when we have a
+                // session and the data is old enough. No session (not in a group, or
+                // the dorm tab is not open) makes this a silent no-op by design.
+                if (System.currentTimeMillis() - lastBroadcastAt
+                        > LEADERBOARD_BROADCAST_INTERVAL_MS) {
+                    broadcastOwnSnapshot(events, today);
+                    lastBroadcastAt = System.currentTimeMillis();
+                }
             } catch (RuntimeException e) {
                 // A stats screen that fails to load must not take the app down;
                 // it keeps the last values and the failure is visible in logcat.
@@ -153,6 +178,129 @@ public class StatsFragment extends Fragment {
         snoozeEmpty.setVisibility(stats.snoozeTop.isEmpty() ? View.VISIBLE : View.GONE);
 
         remoteCount.setText(getString(R.string.stats_remote_count, stats.remoteMutedCount));
+    }
+
+    // ---- dorm leaderboard (offline-first snapshots, design.md §7.2) ----
+
+    /**
+     * Renders "me + every peer we ever heard from". A peer whose snapshot is older
+     * than 24h is greyed out but never hidden: dropping Wi-Fi costs freshness, it
+     * must not make the leaderboard disappear.
+     */
+    private void renderLeaderboard(android.content.Context appContext,
+                                   List<AlarmEvent> events, LocalDate today) {
+        if (leaderboardRows == null || !isAdded()) {
+            return;
+        }
+        List<com.course.tongxiao.group.PeerSnapshot> peers =
+                new com.course.tongxiao.group.PeerStatsStore(appContext).all();
+        leaderboardRows.removeAllViews();
+
+        StatsAggregator.PeerSummary mine =
+                StatsAggregator.summarizeForPeers(events, today, LEADERBOARD_WINDOW_DAYS);
+        addLeaderboardRow(getString(R.string.stats_leaderboard_me),
+                mine.medianStopMinuteOfDay == 0 && mine.days == 0
+                        ? getString(R.string.stats_leaderboard_no_wake)
+                        : formatClock(mine.medianStopMinuteOfDay),
+                getString(R.string.stats_leaderboard_row_detail,
+                        mine.snoozeCount, mine.mutedCount, getString(R.string.stats_time_just_now)),
+                false);
+
+        if (peers.isEmpty()) {
+            leaderboardEmpty.setVisibility(View.VISIBLE);
+            leaderboardStatus.setText(hasGroupSession()
+                    ? getString(R.string.stats_leaderboard_hint)
+                    : getString(R.string.stats_leaderboard_empty_room));
+            return;
+        }
+
+        leaderboardEmpty.setVisibility(View.GONE);
+        int staleCount = 0;
+        long newestReceivedAt = 0;
+        for (com.course.tongxiao.group.PeerSnapshot peer : peers) {
+            if (peer.stale) {
+                staleCount++;
+            }
+            newestReceivedAt = Math.max(newestReceivedAt, peer.receivedAt);
+            String wake = peer.hasData()
+                    ? formatClock(peer.medianStopMinute)
+                    : getString(R.string.stats_leaderboard_no_wake);
+            addLeaderboardRow(peer.nick, wake,
+                    getString(R.string.stats_leaderboard_row_detail,
+                            peer.snoozeCount, peer.mutedCount, ageText(peer.receivedAt)),
+                    peer.stale);
+        }
+
+        String age = ageText(newestReceivedAt);
+        leaderboardStatus.setText(staleCount == 0
+                ? getString(R.string.stats_leaderboard_status, peers.size(), age)
+                : getString(R.string.stats_leaderboard_status_stale,
+                peers.size(), age, staleCount));
+    }
+
+    private void addLeaderboardRow(String name, String wake, String detail, boolean stale) {
+        LinearLayout row = new LinearLayout(requireContext());
+        row.setOrientation(LinearLayout.VERTICAL);
+        int pad = Math.round(6 * getResources().getDisplayMetrics().density);
+        row.setPadding(0, pad, 0, pad);
+
+        TextView title = new TextView(requireContext());
+        title.setText(getString(R.string.stats_leaderboard_row, name, wake));
+        title.setTextSize(14f);
+        title.setTextColor(requireContext().getColor(stale ? R.color.muted : R.color.ink));
+
+        TextView sub = new TextView(requireContext());
+        sub.setText(detail);
+        sub.setTextSize(11f);
+        sub.setTextColor(requireContext().getColor(R.color.muted));
+
+        row.addView(title);
+        row.addView(sub);
+        leaderboardRows.addView(row);
+    }
+
+    /** Publishes our own summary (deviceId/nick/sentAt are filled in by the manager). */
+    private void broadcastOwnSnapshot(List<AlarmEvent> events, LocalDate today) {
+        try {
+            StatsAggregator.PeerSummary mine =
+                    StatsAggregator.summarizeForPeers(events, today, LEADERBOARD_WINDOW_DAYS);
+            org.json.JSONObject payload = new org.json.JSONObject();
+            payload.put("days", mine.days);
+            payload.put("medianStopMinute",
+                    mine.days == 0 ? -1 : mine.medianStopMinuteOfDay);
+            payload.put("snoozeCount", mine.snoozeCount);
+            payload.put("mutedCount", mine.mutedCount);
+            com.course.tongxiao.group.GroupSession.broadcastStats(payload);
+        } catch (org.json.JSONException | RuntimeException ignored) {
+            // The leaderboard is a nicety: never let it disturb the stats screen.
+        }
+    }
+
+    private boolean hasGroupSession() {
+        return com.course.tongxiao.group.GroupSession.currentOrNull() != null;
+    }
+
+    private String formatClock(int minuteOfDay) {
+        int safe = Math.max(0, Math.min(24 * 60 - 1, minuteOfDay));
+        return String.format(java.util.Locale.CHINA, "%02d:%02d", safe / 60, safe % 60);
+    }
+
+    private String ageText(long timestamp) {
+        if (timestamp <= 0) {
+            return getString(R.string.stats_time_just_now);
+        }
+        long minutes = Math.max(0, (System.currentTimeMillis() - timestamp) / 60000L);
+        if (minutes < 1) {
+            return getString(R.string.stats_time_just_now);
+        }
+        if (minutes < 60) {
+            return getString(R.string.stats_time_minutes, (int) minutes);
+        }
+        long hours = minutes / 60;
+        if (hours < 24) {
+            return getString(R.string.stats_time_hours, (int) hours);
+        }
+        return getString(R.string.stats_time_days, (int) (hours / 24));
     }
 
     @Override

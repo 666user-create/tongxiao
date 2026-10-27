@@ -15,6 +15,9 @@ import com.course.tongxiao.group.net.PeerServer;
 import com.course.tongxiao.group.protocol.GroupMessage;
 import com.course.tongxiao.group.protocol.GroupProtocol;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
@@ -66,17 +69,18 @@ public class GroupManager implements PeerLink.Listener {
     private volatile boolean closed;
 
     public GroupManager(@NonNull TongxiaoDb db, @NonNull SettingsStore settings,
-                        @NonNull GroupIdentity identity, @NonNull AlarmGateway gateway) {
-        this(db, settings, identity, gateway, PeerLink.Config.defaults());
+                        @NonNull GroupIdentity identity, @NonNull AlarmGateway gateway,
+                        @NonNull PeerStatsStore peerStats) {
+        this(db, settings, identity, gateway, peerStats, PeerLink.Config.defaults());
     }
 
     /** Test seam: inject tiny heartbeat/backoff values. */
     public GroupManager(@NonNull TongxiaoDb db, @NonNull SettingsStore settings,
                         @NonNull GroupIdentity identity, @NonNull AlarmGateway gateway,
-                        @NonNull PeerLink.Config config) {
+                        @NonNull PeerStatsStore peerStats, @NonNull PeerLink.Config config) {
         this.db = db;
         this.identity = identity;
-        this.coordinator = new GroupCoordinator(db, settings, identity, gateway);
+        this.coordinator = new GroupCoordinator(db, settings, identity, gateway, peerStats);
         this.config = config;
     }
 
@@ -211,6 +215,49 @@ public class GroupManager implements PeerLink.Listener {
                 continue;
             }
             if (send(member.deviceId, push)) {
+                sent++;
+            }
+        }
+        return sent;
+    }
+
+    /**
+     * Broadcasts my leaderboard snapshot to every peer that is reachable right now.
+     *
+     * <p>Offline peers are <b>not</b> queued: the next broadcast carries the newest
+     * snapshot anyway, which is exactly the "eventual consistency" the offline-first
+     * ranking relies on. The pings/stat snapshots are small; a queue would only add
+     * a stale-data failure mode.
+     *
+     * <p>Identity fields are filled here (never trusted from the UI), and the
+     * receiver re-validates everything again.
+     *
+     * @param snapshot {@code medianStopMinute} / {@code days} / counts, as produced
+     *                 by the stats page
+     * @return number of peers the snapshot was sent to
+     */
+    public int broadcastStats(@NonNull JSONObject snapshot) {
+        if (identity.groupCode().isEmpty()) {
+            return 0; // not in a group: nothing to broadcast to
+        }
+        JSONObject payload;
+        try {
+            payload = new JSONObject(snapshot.toString());
+            payload.put(GroupMessage.FIELD_STATS_DEVICE_ID, identity.deviceId());
+            payload.put(GroupMessage.FIELD_NICK, identity.nick());
+            payload.put(GroupMessage.FIELD_STATS_SENT_AT, System.currentTimeMillis());
+        } catch (JSONException broken) {
+            Log.w(TAG, "cannot encode the stats snapshot", broken);
+            return 0;
+        }
+        GroupMessage message = GroupMessage.statsPush(payload);
+        List<PeerLink> targets;
+        synchronized (lock) {
+            targets = new ArrayList<>(linksByDevice.values());
+        }
+        int sent = 0;
+        for (PeerLink link : targets) {
+            if (link.send(message)) {
                 sent++;
             }
         }

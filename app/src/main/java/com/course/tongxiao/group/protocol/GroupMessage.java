@@ -39,7 +39,15 @@ public final class GroupMessage {
         /** Owner's answer to a SET_REQUEST. */
         SET_RESPONSE,
         /** 60s heartbeat. */
-        PING;
+        PING,
+        /**
+         * Leaderboard snapshot of the sender's own wake-up statistics.
+         *
+         * <p>Appended after the design.md §4 table on purpose: it is an additive
+         * message type, and an older build simply ignores it as an unknown type
+         * (design.md §4 错误处理), so no version negotiation is needed.
+         */
+        STATS_PUSH;
 
         /** @return the constant for a wire value, or null when unknown (§4: ignore). */
         @Nullable
@@ -80,6 +88,14 @@ public final class GroupMessage {
     public static final String FIELD_ALARM_REPEAT = "repeat";
     public static final String FIELD_ALARM_ENABLED = "enabled";
     public static final String FIELD_ALARM_RINGING = "ringing";
+
+    // ---- STATS_PUSH snapshot fields (leaderboard, offline-first) ----
+    public static final String FIELD_STATS_DEVICE_ID = "deviceId";
+    public static final String FIELD_STATS_DAYS = "days";
+    public static final String FIELD_STATS_MEDIAN_STOP = "medianStopMinute";
+    public static final String FIELD_STATS_SNOOZE = "snoozeCount";
+    public static final String FIELD_STATS_MUTED = "mutedCount";
+    public static final String FIELD_STATS_SENT_AT = "sentAt";
 
     private final Type type;
     private final JSONObject body;
@@ -198,6 +214,16 @@ public final class GroupMessage {
     @NonNull
     public static GroupMessage setResponse(@NonNull String reqId, boolean accept) {
         return build(Type.SET_RESPONSE, FIELD_REQ_ID, reqId, FIELD_ACCEPT, accept);
+    }
+
+    /**
+     * Leaderboard snapshot. The snapshot fields travel nested under
+     * {@link #FIELD_PAYLOAD} (same envelope shape as SET_REQUEST) and are
+     * re-validated by the receiver — the sender is never trusted.
+     */
+    @NonNull
+    public static GroupMessage statsPush(@NonNull JSONObject snapshot) {
+        return build(Type.STATS_PUSH, FIELD_PAYLOAD, snapshot);
     }
 
     // JSONObject.put(String, Object) only throws for non-finite numbers; every value
