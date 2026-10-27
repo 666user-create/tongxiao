@@ -67,6 +67,25 @@ public class RingService extends Service {
     private boolean ringing;
     private boolean destroyed;
 
+    /**
+     * Which alarm is ringing right now, process-wide. The dorm group needs this to
+     * answer CMD_MUTE (design.md §3.2: muting the ringing alarm needs no
+     * confirmation) without the group package touching the service internals.
+     */
+    private static volatile String ringingAlarmUid;
+    private static volatile long ringingStartedAt;
+
+    /** @return uid of the alarm currently ringing, or null. */
+    @Nullable
+    public static String currentRingingUid() {
+        return ringingAlarmUid;
+    }
+
+    /** @return wall-clock time the current ring started, or 0. */
+    public static long currentRingStartedAt() {
+        return ringingStartedAt;
+    }
+
     @Override
     public void onCreate() {
         super.onCreate();
@@ -142,6 +161,8 @@ public class RingService extends Service {
             return; // duplicate start while already ringing
         }
         ringing = true;
+        ringingAlarmUid = alarm == null ? null : alarm.uid;
+        ringingStartedAt = ringStartedAt();
         acquireWakeLock();
         startPlayer(alarm == null ? null : alarm.ringtoneUri);
         if (alarm == null || alarm.vibrate) {
@@ -281,6 +302,8 @@ public class RingService extends Service {
     /** Releases audio/vibration/wakelock and removes the notification. */
     private void shutdown() {
         ringing = false;
+        ringingAlarmUid = null;
+        ringingStartedAt = 0L;
         releasePlayer();
         if (vibrator != null) {
             vibrator.cancel();
@@ -318,6 +341,8 @@ public class RingService extends Service {
     public void onDestroy() {
         destroyed = true;
         ringing = false;
+        ringingAlarmUid = null;
+        ringingStartedAt = 0L;
         releasePlayer();
         if (vibrator != null) {
             vibrator.cancel();

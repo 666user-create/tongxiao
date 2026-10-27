@@ -6,6 +6,7 @@ import android.text.TextUtils;
 import android.view.View;
 import android.widget.EditText;
 import android.widget.RadioGroup;
+import android.widget.TextView;
 import android.widget.TimePicker;
 import android.widget.Toast;
 
@@ -69,6 +70,15 @@ public class EditAlarmActivity extends AppCompatActivity {
     private MaterialSwitch vibrateSwitch;
     private MaterialSwitch challengeSwitch;
 
+    // Step 6.1/6.2 cards
+    private View suggestionCard;
+    private TextView suggestionTitle;
+    private TextView suggestionText;
+    private TextView weatherHint;
+    private View suggestionActions;
+    @Nullable
+    private com.course.tongxiao.engine.adaptive.Suggestion pendingSuggestion;
+
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -105,6 +115,23 @@ public class EditAlarmActivity extends AppCompatActivity {
 
         findViewById(R.id.edit_save).setOnClickListener(v -> save());
         findViewById(R.id.edit_test_ring).setOnClickListener(v -> testRing());
+
+        suggestionCard = findViewById(R.id.edit_suggestion_card);
+        suggestionTitle = findViewById(R.id.edit_suggestion_title);
+        suggestionText = findViewById(R.id.edit_suggestion_text);
+        weatherHint = findViewById(R.id.edit_weather_hint);
+        suggestionActions = findViewById(R.id.edit_suggestion_actions);
+        findViewById(R.id.edit_suggestion_accept).setOnClickListener(v -> {
+            if (pendingSuggestion != null) {
+                hour = pendingSuggestion.hour;
+                minute = pendingSuggestion.minute;
+                updateTimeLabel();
+            }
+            suggestionCard.setVisibility(View.GONE);
+            Toast.makeText(this, R.string.smart_suggestion_accepted, Toast.LENGTH_SHORT).show();
+        });
+        findViewById(R.id.edit_suggestion_dismiss).setOnClickListener(v ->
+                suggestionCard.setVisibility(View.GONE));
         MaterialButton delete = findViewById(R.id.edit_delete);
         delete.setVisibility(alarmId > 0 ? View.VISIBLE : View.GONE);
         delete.setOnClickListener(v -> delete());
@@ -153,6 +180,29 @@ public class EditAlarmActivity extends AppCompatActivity {
     private void loadExisting() {
         worker.execute(() -> {
             final Alarm loaded = db.alarmDao().getById(alarmId);
+            // Step 6.1: the suggestion is computed on the worker (Room read) but it
+            // only rewrites the hour/minute fields when the user taps 采纳 — the
+            // engine never writes to the database itself.
+            final com.course.tongxiao.engine.adaptive.Suggestion suggestion;
+            final int sampleDays;
+            if (loaded != null) {
+                java.util.List<com.course.tongxiao.data.entity.AlarmEvent> events =
+                        db.alarmEventDao().getRecent(alarmId,
+                                com.course.tongxiao.engine.adaptive.AdaptiveEngine
+                                        .windowStartMillis(System.currentTimeMillis()));
+                com.course.tongxiao.engine.adaptive.AdaptiveEngine engine =
+                        new com.course.tongxiao.engine.adaptive.AdaptiveEngine();
+                suggestion = engine.suggest(loaded, events);
+                sampleDays = engine.sampleDays(loaded, events);
+            } else {
+                suggestion = null;
+                sampleDays = 0;
+            }
+            final int weatherAdvance = db.weatherCacheDao() == null ? 0
+                    : new com.course.tongxiao.engine.weather.WeatherClient(db.weatherCacheDao())
+                    .advanceMinutes(new com.course.tongxiao.data.SettingsStore(this).getCity(),
+                            java.time.LocalDate.now().plusDays(1).toString(), 20);
+
             runOnUiThread(() -> {
                 if (loaded == null) {
                     finish();
@@ -170,8 +220,53 @@ public class EditAlarmActivity extends AppCompatActivity {
                         && ChallengeConfig.fromJson(loaded.challengeOverrideJson).mode
                         != ChallengeConfig.Mode.DIRECT);
                 applyRepeatToUi(loaded);
+                renderSuggestion(suggestion, sampleDays, weatherAdvance);
             });
         });
+    }
+
+    /** Shows the adaptive suggestion card and/or the weather advance hint. */
+    private void renderSuggestion(
+            @Nullable com.course.tongxiao.engine.adaptive.Suggestion suggestion,
+            int sampleDays, int weatherAdvance) {
+        if (weatherAdvance > 0) {
+            weatherHint.setVisibility(View.VISIBLE);
+            weatherHint.setText(getString(R.string.smart_weather_hint, weatherAdvance));
+        } else {
+            weatherHint.setVisibility(View.GONE);
+        }
+
+        if (suggestion == null) {
+            if (sampleDays > 0) {
+                suggestionCard.setVisibility(View.VISIBLE);
+                suggestionText.setText(getString(R.string.smart_suggestion_recording, sampleDays));
+                suggestionActions.setVisibility(View.GONE);
+            } else {
+                suggestionCard.setVisibility(weatherAdvance > 0 ? View.VISIBLE : View.GONE);
+                suggestionTitle.setVisibility(weatherAdvance > 0 ? View.GONE : View.VISIBLE);
+                if (weatherAdvance > 0) {
+                    suggestionText.setVisibility(View.GONE);
+                }
+            }
+            return;
+        }
+
+        pendingSuggestion = suggestion;
+        suggestionCard.setVisibility(View.VISIBLE);
+        suggestionTitle.setVisibility(View.VISIBLE);
+        suggestionText.setVisibility(View.VISIBLE);
+        suggestionActions.setVisibility(View.VISIBLE);
+        String median = formatClock(suggestion.medianStopMinuteOfDay);
+        String target = formatClock(suggestion.hour * 60 + suggestion.minute);
+        suggestionText.setText(suggestion.type
+                == com.course.tongxiao.engine.adaptive.Suggestion.Type.MOVE_EARLIER
+                ? getString(R.string.smart_suggestion_earlier, suggestion.sampleDays, median, target)
+                : getString(R.string.smart_suggestion_later, suggestion.sampleDays, median, target));
+    }
+
+    private static String formatClock(int minuteOfDay) {
+        int safe = Math.max(0, Math.min(24 * 60 - 1, minuteOfDay));
+        return String.format(Locale.CHINA, "%02d:%02d", safe / 60, safe % 60);
     }
 
     private void applyRepeatToUi(Alarm alarm) {

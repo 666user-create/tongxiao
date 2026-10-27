@@ -83,6 +83,18 @@
             </intent-filter>
         </receiver>
 
+        <!-- Read-only alarm sharing (design.md bonus item): other apps (and
+             `adb shell content query`) can read the alarm list, but insert,
+             update and delete are rejected inside the provider. Exported without
+             a custom permission on purpose: the demo needs a query from a shell;
+             the payload is non-sensitive schedule data and the provider refuses
+             every write, which is the property lint cannot see. -->
+        <provider
+            android:name=".provider.AlarmProvider"
+            android:authorities="com.course.tongxiao.alarms"
+            android:exported="true"
+            tools:ignore="ExportedContentProvider" />
+
         <service
             android:name=".alarm.RingService"
             android:exported="false"

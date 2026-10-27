@@ -44,12 +44,17 @@ public class AlarmScheduler {
     private final AlarmManager alarmManager;
     private final AlarmRepository repository;
     private final NextTriggerCalculator calculator;
+    private final com.course.tongxiao.engine.weather.WeatherClient weatherClient;
+    private final com.course.tongxiao.data.SettingsStore settings;
 
     public AlarmScheduler(Context context, AlarmRepository repository, HolidayResolver resolver) {
         this.appContext = context.getApplicationContext();
         this.alarmManager = (AlarmManager) appContext.getSystemService(Context.ALARM_SERVICE);
         this.repository = repository;
         this.calculator = new NextTriggerCalculator(resolver);
+        this.weatherClient = new com.course.tongxiao.engine.weather.WeatherClient(
+                com.course.tongxiao.data.TongxiaoDb.get(appContext).weatherCacheDao());
+        this.settings = new com.course.tongxiao.data.SettingsStore(appContext);
     }
 
     /**
@@ -60,7 +65,7 @@ public class AlarmScheduler {
      *         never fire. With an inexact fallback the platform may fire later
      *         than the returned value.
      */
-    @AnyThread
+    @WorkerThread
     public long schedule(Alarm alarm) {
         if (!alarm.enabled) {
             cancel(alarm);
@@ -69,6 +74,12 @@ public class AlarmScheduler {
         long triggerAt;
         try {
             triggerAt = calculator.nextTriggerMillis(alarm, LocalDateTime.now());
+            // Weather advance must happen here, not in AlarmReceiver: the receiver
+            // only runs once the trigger is due, so an earlier ring time has to be
+            // part of the registration itself (design.md §5.3).
+            if (triggerAt > 0) {
+                triggerAt = weatherClient.advancedTriggerAt(alarm, triggerAt, settings.getCity());
+            }
         } catch (RuntimeException badData) {
             // e.g. hour/minute out of range from imported or remote data
             Log.e(TAG, "alarm " + alarm.id + " has invalid time", badData);

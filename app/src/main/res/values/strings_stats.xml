@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Step 6.3 statistics screen strings. Kept in a separate file so the shared
+     strings.xml stays a single merge point for the other steps. -->
+<resources>
+    <string name="stats_title">统计</string>
+
+    <string name="stats_trend_title">起床趋势（最近 14 天）</string>
+    <string name="stats_trend_caption">最近 14 天记录了 %1$d 天</string>
+    <string name="stats_trend_empty">还没有停铃记录，睡几晚再来</string>
+    <string name="stats_trend_a11y">起床趋势折线，共 %1$d 天数据</string>
+
+    <string name="stats_snooze_title">贪睡排行 Top3</string>
+    <string name="stats_snooze_row">%1$s · 贪睡 %2$d 次</string>
+    <string name="stats_snooze_empty">最近没有贪睡记录</string>
+    <string name="stats_alarm_deleted">已删除的闹钟</string>
+
+    <string name="stats_remote_title">被舍友静音</string>
+    <string name="stats_remote_count">%1$d 次</string>
+    <string name="stats_remote_helper">舍友远程静音都会留痕，这里统计最近 14 天被静音的次数</string>
+</resources>

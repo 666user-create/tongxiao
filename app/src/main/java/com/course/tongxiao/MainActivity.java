@@ -29,6 +29,8 @@ public class MainActivity extends AppCompatActivity {
 
     private static final String TAG_ALARMS = "tab_alarms";
     private static final String TAG_SETTINGS = "tab_settings";
+    private static final String TAG_STATS = "tab_stats";
+    private static final String TAG_GROUP = "tab_group";
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -44,6 +46,10 @@ public class MainActivity extends AppCompatActivity {
         nav.setOnItemSelectedListener(item -> {
             if (item.getItemId() == R.id.tab_settings) {
                 showSettings();
+            } else if (item.getItemId() == R.id.tab_stats) {
+                showStats();
+            } else if (item.getItemId() == R.id.tab_group) {
+                showGroup();
             } else {
                 showAlarms();
             }
@@ -58,10 +64,31 @@ public class MainActivity extends AppCompatActivity {
             Fragment current = getSupportFragmentManager().findFragmentById(R.id.tab_container);
             if (current instanceof SettingsFragment) {
                 nav.setSelectedItemId(R.id.tab_settings);
+            } else if (current instanceof com.course.tongxiao.ui.stats.StatsFragment) {
+                nav.setSelectedItemId(R.id.tab_stats);
+            } else if (current instanceof com.course.tongxiao.group.ui.GroupFragment) {
+                nav.setSelectedItemId(R.id.tab_group);
             } else {
                 nav.setSelectedItemId(R.id.tab_alarms);
             }
         }
+
+        // Dorm group seam: the alarm layer owns "mute the ringing alarm" and
+        // "apply an accepted request", so it is installed once here (design.md §4).
+        com.course.tongxiao.group.GroupWiring.install(
+                new com.course.tongxiao.alarm.AlarmGatewayImpl(getApplicationContext()));
+
+        // Step 6.4: periodic self-check (every 6h) plus one immediate check on
+        // launch, so a registration lost to a reinstall/force-stop is healed
+        // without waiting for the next boot event.
+        com.course.tongxiao.work.SelfCheckWorker.schedule(this);
+        new Thread(() -> {
+            try {
+                com.course.tongxiao.work.SelfCheckWorker.runOnce(this);
+            } catch (RuntimeException ignored) {
+                // never block the UI on self-check
+            }
+        }, "alarm-selfcheck").start();
 
         ensureNotificationPermission();
     }
@@ -72,6 +99,14 @@ public class MainActivity extends AppCompatActivity {
 
     private void showSettings() {
         swap(TAG_SETTINGS, SettingsFragment::new);
+    }
+
+    private void showStats() {
+        swap(TAG_STATS, com.course.tongxiao.ui.stats.StatsFragment::new);
+    }
+
+    private void showGroup() {
+        swap(TAG_GROUP, com.course.tongxiao.group.ui.GroupFragment::new);
     }
 
     /**

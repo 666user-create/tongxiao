@@ -7,6 +7,16 @@
         android:title="@string/tab_alarms" />
 
     <item
+        android:id="@+id/tab_group"
+        android:icon="@android:drawable/ic_menu_share"
+        android:title="@string/tab_group" />
+
+    <item
+        android:id="@+id/tab_stats"
+        android:icon="@android:drawable/ic_menu_sort_by_size"
+        android:title="@string/tab_stats" />
+
+    <item
         android:id="@+id/tab_settings"
         android:icon="@android:drawable/ic_menu_preferences"
         android:title="@string/tab_settings" />

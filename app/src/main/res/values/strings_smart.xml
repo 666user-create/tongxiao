@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Step 6.1 smart-engine texts (design.md §5.2).
+
+  Kept in a separate file on purpose: strings.xml is edited by several steps in
+  parallel, and these belong to the adaptive-suggestion card shown on the edit
+  screen.
+-->
+<resources>
+
+    <!-- Adaptive suggestion card. %1$d = sampled days, %2$s = median stop time,
+         %3$s = suggested time. -->
+    <string name="smart_suggestion_title">行为建议</string>
+    <string name="smart_suggestion_earlier">最近 %1$d 天你都在 %2$s 左右才停铃，建议把闹钟改到 %3$s</string>
+    <string name="smart_suggestion_later">最近 %1$d 天你都提前 %2$s 就停铃了，而且没有贪睡，可以把闹钟晚 10 分钟（%3$s）</string>
+    <string name="smart_suggestion_accept">采纳</string>
+    <string name="smart_suggestion_dismiss">忽略</string>
+    <string name="smart_suggestion_recording">继续记录中：已记录 %1$d 天，满 5 天后给出建议</string>
+
+</resources>

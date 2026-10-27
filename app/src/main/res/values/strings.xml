@@ -41,6 +41,8 @@
     <string name="next_weekday">%1$s %2$s</string>
     <string name="next_ring_label">下次：%1$s</string>
     <string name="next_never">下次：无（检查重复设置）</string>
+    <string name="smart_suggestion_accepted">已采纳建议，记得点保存</string>
+    <string name="smart_weather_hint">明天天气不佳，明早提前 %1$d 分钟响铃</string>
 
     <string-array name="weekday_short">
         <item>周一</item>
@@ -63,6 +65,7 @@
     <!-- Step 3.3 tabs and settings -->
     <string name="tab_alarms">闹钟</string>
     <string name="tab_settings">设置</string>
+    <string name="tab_stats">统计</string>
     <string name="settings_holiday_ok">节假日数据已就绪（今年共 %1$d 天法定假日）</string>
     <string name="settings_holiday_missing">%1$d 年节假日数据尚未更新，将按普通工作日判断</string>
     <string name="settings_holiday_degraded">节假日数据解析失败，已降级为普通工作日判断</string>

@@ -69,6 +69,7 @@ public class AlarmListFragment extends Fragment {
         new Thread(() -> {
             try {
                 scheduler.rescheduleAll();
+                refreshWeatherIfStale(db);
             } catch (RuntimeException ignored) {
                 // never block the UI on this
             }
@@ -78,6 +79,25 @@ public class AlarmListFragment extends Fragment {
         viewModel.getTomorrowStatus().observe(getViewLifecycleOwner(), subtitle::setText);
 
         view.findViewById(R.id.add_alarm).setOnClickListener(v -> openEditor(null));
+    }
+
+    /**
+     * Fetches tomorrow's forecast at most every 12 hours (design.md §5.3). Runs on
+     * the caller's background thread; a failure just leaves the cached value
+     * (stale cache = no advance, never a wrong advance).
+     */
+    private void refreshWeatherIfStale(TongxiaoDb db) {
+        String city = new com.course.tongxiao.data.SettingsStore(requireContext()).getCity();
+        if (city == null || city.trim().isEmpty()) {
+            return; // weather link is off
+        }
+        String tomorrow = java.time.LocalDate.now().plusDays(1).toString();
+        com.course.tongxiao.data.entity.WeatherCache cached = db.weatherCacheDao().get(city, tomorrow);
+        long now = System.currentTimeMillis();
+        if (cached != null && now - cached.fetchedAt < 12L * 60 * 60 * 1000) {
+            return; // fresh enough
+        }
+        new com.course.tongxiao.engine.weather.WeatherClient(db.weatherCacheDao()).refresh(city);
     }
 
     private void openEditor(@Nullable Alarm alarm) {

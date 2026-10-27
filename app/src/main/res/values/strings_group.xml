@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Step 5.5 dorm-group page. Kept in its own file so the group feature does not
+     touch the shared strings.xml (and cannot collide with other people's edits). -->
+<resources>
+
+    <string name="tab_group">宿舍</string>
+    <string name="group_scope_hint">仅在本页打开时，舍友才能发现你并发起远程静音 / 代设请求</string>
+
+    <!-- Not in a group yet -->
+    <string name="group_join_title">宿舍互助</string>
+    <string name="group_join_helper">同一 Wi-Fi 下的舍友互相可见。创建后把 6 位组码告诉舍友，或输入舍友给你的组码。</string>
+    <string name="group_create">创建宿舍组</string>
+    <string name="group_code_hint">6 位组码</string>
+    <string name="group_join">加入</string>
+    <string name="group_code_invalid">组码必须是 6 位数字</string>
+    <string name="group_created">已创建宿舍组：%1$s，念给舍友即可</string>
+    <string name="group_joined">已加入组码 %1$s，等待舍友上线</string>
+
+    <!-- In a group -->
+    <string name="group_code_label">组码 %1$s</string>
+    <string name="group_nick_label">我：%1$s</string>
+    <string name="group_members_title">舍友</string>
+    <string name="group_member_empty">还没有舍友上线</string>
+    <string name="group_pending_title">待我确认</string>
+    <string name="group_pending_empty">没有待确认的请求</string>
+    <string name="group_accept">同意</string>
+    <string name="group_reject">拒绝</string>
+    <string name="group_leave">退出宿舍组</string>
+    <string name="group_left">已退出宿舍组</string>
+    <string name="group_member_online_dot">●</string>
+
+    <!-- Permission chips (group_members.grantedMask bits) -->
+    <string name="perm_mute">可静音</string>
+    <string name="perm_see">可看时刻表</string>
+    <string name="perm_set">可代设</string>
+    <string name="group_member_no_perm">未授权</string>
+
+    <!-- Pending requests -->
+    <string name="group_request_from">来自 %1$s</string>
+    <string name="group_request_add_alarm">代设闹钟 %1$s</string>
+    <string name="group_request_remove_alarm">删除我的一个闹钟</string>
+    <string name="group_request_set_challenge">修改我的停铃挑战</string>
+    <string name="group_request_accepted">已同意，正在生效</string>
+    <string name="group_request_rejected">已拒绝</string>
+    <string name="group_request_failed">这条请求已失效或无法执行</string>
+
+    <!-- Wiring / service state -->
+    <string name="group_no_gateway_warning">静音 / 代设功能未接线（缺少 AlarmGateway 实现），远程指令会被拒绝</string>
+    <string name="group_service_failed">无法开启局域网服务（端口绑定失败）</string>
+
+</resources>
