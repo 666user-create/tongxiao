@@ -170,9 +170,13 @@ public class ChallengeEngineTest {
     @Test
     public void defaults_areSaneForFirstRun() {
         ChallengeConfig d = ChallengeConfig.defaults();
-        assertEquals(ChallengeConfig.Mode.QUIZ, d.mode);
+        // Challenge is opt-in (product decision): a fresh alarm stops directly.
+        assertEquals(ChallengeConfig.Mode.DIRECT, d.mode);
         assertTrue(d.questionCount >= 1 && d.questionCount <= 5);
         assertFalse(d.types.isEmpty());
+
+        ChallengeConfig quiz = ChallengeConfig.quizDefault();
+        assertEquals("the edit-screen switch enables QUIZ", ChallengeConfig.Mode.QUIZ, quiz.mode);
     }
 
     @Test

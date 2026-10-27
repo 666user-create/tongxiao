@@ -75,6 +75,19 @@ public class RingActions {
         scheduler.scheduleAt(alarm, LocalDateTime.now().plusMinutes(minutes));
     }
 
+    /** Emergency stop from the challenge screen: same state change, distinct log type. */
+    @WorkerThread
+    public void onEmergencyStop(Alarm alarm, long fireAtMillis) {
+        record(alarm, fireAtMillis, AlarmEvent.Type.EMERGENCY_STOP, "emergency");
+        if (alarm.repeatMode == Alarm.RepeatMode.ONCE) {
+            db.alarmDao().setEnabled(alarm.id, false);
+            alarm.enabled = false;
+            scheduler.cancel(alarm);
+        } else {
+            scheduler.schedule(alarm);
+        }
+    }
+
     /** Holiday / rule skip while the system alarm still fired (design.md §2.2). */
     @WorkerThread
     public void onSkipped(Alarm alarm, long fireAtMillis, String reason) {

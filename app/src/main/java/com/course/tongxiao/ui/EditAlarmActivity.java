@@ -19,6 +19,7 @@ import com.course.tongxiao.data.entity.Alarm;
 import com.course.tongxiao.data.repository.AlarmRepository;
 import com.course.tongxiao.engine.HolidayCalendar;
 import com.course.tongxiao.engine.HolidayResolver;
+import com.course.tongxiao.engine.challenge.ChallengeConfig;
 import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.button.MaterialButtonToggleGroup;
@@ -63,6 +64,7 @@ public class EditAlarmActivity extends AppCompatActivity {
     private MaterialSwitch skipHolidaysSwitch;
     private Slider snoozeSlider;
     private MaterialSwitch vibrateSwitch;
+    private MaterialSwitch challengeSwitch;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -89,6 +91,7 @@ public class EditAlarmActivity extends AppCompatActivity {
         skipHolidaysSwitch = findViewById(R.id.edit_skip_holidays);
         snoozeSlider = findViewById(R.id.edit_snooze);
         vibrateSwitch = findViewById(R.id.edit_vibrate);
+        challengeSwitch = findViewById(R.id.edit_challenge);
 
         timeButton.setOnClickListener(v -> openTimePicker());
         repeatGroup.setOnCheckedChangeListener((group, checkedId) -> updateVisibility());
@@ -164,6 +167,9 @@ public class EditAlarmActivity extends AppCompatActivity {
                 snoozeSlider.setValue(Math.max(5, Math.min(30, loaded.snoozeMin)));
                 vibrateSwitch.setChecked(loaded.vibrate);
                 skipHolidaysSwitch.setChecked(loaded.skipHolidays);
+                challengeSwitch.setChecked(!TextUtils.isEmpty(loaded.challengeOverrideJson)
+                        && ChallengeConfig.fromJson(loaded.challengeOverrideJson).mode
+                        != ChallengeConfig.Mode.DIRECT);
                 applyRepeatToUi(loaded);
             });
         });
@@ -245,6 +251,9 @@ public class EditAlarmActivity extends AppCompatActivity {
         alarm.skipHolidays = skipHolidaysSwitch.isChecked();
         alarm.snoozeMin = (int) snoozeSlider.getValue();
         alarm.vibrate = vibrateSwitch.isChecked();
+        // Challenge is opt-in (design decision): null = inherit the app default.
+        alarm.challengeOverrideJson = challengeSwitch.isChecked()
+                ? ChallengeConfig.quizDefault().toJson() : null;
         alarm.enabled = true; // saving an alarm implies enabling it
 
         worker.execute(() -> {

@@ -5,6 +5,8 @@ import android.app.Activity;
 import android.content.Intent;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.WindowManager;
@@ -14,11 +16,14 @@ import android.widget.TextView;
 import androidx.annotation.Nullable;
 
 import com.course.tongxiao.R;
+import com.course.tongxiao.data.SettingsStore;
 import com.course.tongxiao.data.TongxiaoDb;
 import com.course.tongxiao.data.entity.Alarm;
 import com.course.tongxiao.data.repository.AlarmRepository;
 import com.course.tongxiao.engine.HolidayCalendar;
 import com.course.tongxiao.engine.HolidayResolver;
+import com.course.tongxiao.engine.challenge.ChallengeConfig;
+import com.course.tongxiao.ui.UnlockActivity;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -46,6 +51,7 @@ public class StopRingActivity extends Activity {
     public static final String EXTRA_LABEL = "label";
 
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
+    private final Handler main = new Handler(Looper.getMainLooper());
 
     private TongxiaoDb db;
     private RingActions actions;
@@ -89,6 +95,7 @@ public class StopRingActivity extends Activity {
 
         registerPredictiveBack();
         applyIntent(getIntent());
+        scheduleAutoChallenge();
     }
 
     @Override
@@ -152,25 +159,65 @@ public class StopRingActivity extends Activity {
         });
     }
 
-    /** Silences the ring immediately, then records the state change in the background. */
+    /** Silences the ring, or hands over to the challenge when one is configured. */
     private void stopAndFinish() {
         disableButtons();
-        // 1) Sound first: never let a DB failure keep the alarm ringing.
-        RingService.stop(this, alarmId);
-        // 2) Then persist + re-arm, isolated from crashes.
         final int id = alarmId;
         final long startedAt = ringStartedAt;
         worker.execute(() -> {
-            try {
-                Alarm alarm = id > 0 ? db.alarmDao().getById(id) : null;
-                if (alarm != null && actions != null) {
-                    actions.onStopped(alarm, startedAt, "user");
+            ChallengeConfig config = resolveConfig(id);
+            runOnUiThread(() -> {
+                if (config != null && config.mode != ChallengeConfig.Mode.DIRECT) {
+                    // Step 4.2: the ring keeps going until the challenge is passed.
+                    startActivity(new Intent(this, UnlockActivity.class)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                            .putExtra(UnlockActivity.EXTRA_ALARM_ID, id)
+                            .putExtra(UnlockActivity.EXTRA_RING_STARTED_AT, startedAt));
+                    finish();
+                    return;
                 }
-            } catch (RuntimeException e) {
-                Log.e(TAG, "stop bookkeeping failed for alarm " + id, e);
-            } finally {
-                runOnUiThread(this::finish);
+                RingService.stop(this, id);
+                worker.execute(() -> {
+                    try {
+                        Alarm alarm = id > 0 ? db.alarmDao().getById(id) : null;
+                        if (alarm != null && actions != null) {
+                            actions.onStopped(alarm, startedAt, "user");
+                        }
+                    } catch (RuntimeException e) {
+                        Log.e(TAG, "stop bookkeeping failed for alarm " + id, e);
+                    } finally {
+                        runOnUiThread(this::finish);
+                    }
+                });
+            });
+        });
+    }
+
+    /** Alarm override first, then the app-wide default, then engine defaults. */
+    @Nullable
+    private ChallengeConfig resolveConfig(int id) {
+        try {
+            Alarm alarm = id > 0 ? db.alarmDao().getById(id) : null;
+            if (alarm != null && !TextUtils.isEmpty(alarm.challengeOverrideJson)) {
+                return ChallengeConfig.fromJson(alarm.challengeOverrideJson);
             }
+            return ChallengeConfig.fromJson(new SettingsStore(this).getDefaultChallengeJson());
+        } catch (RuntimeException e) {
+            return ChallengeConfig.defaults();
+        }
+    }
+
+    /** Auto-show the challenge after the configured delay (design.md §5.4). */
+    private void scheduleAutoChallenge() {
+        final int id = alarmId;
+        worker.execute(() -> {
+            ChallengeConfig config = resolveConfig(id);
+            if (config == null || config.mode == ChallengeConfig.Mode.DIRECT) {
+                return;
+            }
+            int delaySeconds = Math.max(0, Math.min(ChallengeConfig.MAX_DELAY_SECONDS,
+                    config.delaySeconds));
+            runOnUiThread(() -> main.postDelayed(this::stopAndFinish, delaySeconds * 1000L));
         });
     }
 

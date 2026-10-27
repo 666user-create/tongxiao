@@ -64,8 +64,22 @@ public class ChallengeConfig {
         this.shakeCount = shakeCount;
     }
 
-    /** Engine defaults: two arithmetic questions, retry on wrong answer. */
+    /**
+     * Engine defaults: <b>challenge OFF</b> (mode DIRECT).
+     *
+     * <p>The challenge is an opt-in feature (explicit product decision): a fresh
+     * alarm must ring and stop normally, and the user turns the puzzle on per
+     * alarm or globally in settings. Enabling it is a choice, never a surprise.
+     * When enabled from the UI the count/types come from the edit screen.
+     */
     public static ChallengeConfig defaults() {
+        return new ChallengeConfig(Mode.DIRECT, 2,
+                EnumSet.of(Question.Type.ARITHMETIC, Question.Type.GENERAL),
+                WrongPolicy.RETRY, 5, 5);
+    }
+
+    /** Config produced by the edit-screen "停铃挑战" switch (QUIZ, 2 questions). */
+    public static ChallengeConfig quizDefault() {
         return new ChallengeConfig(Mode.QUIZ, 2,
                 EnumSet.of(Question.Type.ARITHMETIC, Question.Type.GENERAL),
                 WrongPolicy.RETRY, 5, 5);

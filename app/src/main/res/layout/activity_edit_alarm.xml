@@ -201,6 +201,21 @@
                 android:checked="true"
                 android:text="@string/edit_vibrate" />
 
+            <com.google.android.material.materialswitch.MaterialSwitch
+                android:id="@+id/edit_challenge"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:text="@string/edit_challenge" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:text="@string/edit_challenge_helper"
+                android:textColor="@color/muted"
+                android:textSize="12sp" />
+
         </LinearLayout>
 
     </ScrollView>
