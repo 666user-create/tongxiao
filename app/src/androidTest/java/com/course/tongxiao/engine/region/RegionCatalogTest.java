@@ -31,17 +31,18 @@ import java.util.Set;
  * lower number means districts went missing, which is the failure this class exists
  * to prevent.
  *
- * <p>Numbers: 31 province-level divisions (the NBS statistical code set covers the
- * mainland only; Hong Kong/Macao/Taiwan are not part of it), 341 cities/prefectures
- * (municipalities collapsed, so 重庆's two pseudo levels became one) and 3056
- * district/county units.
+ * <p>Numbers: 34 province-level divisions - 31 from the NBS statistical code set
+ * (mainland) plus Hong Kong / Macao / Taiwan appended by us, 365 cities/prefectures
+ * (municipalities collapsed, so 重庆's two pseudo levels became one; Taiwan is city
+ * level only) and 3094 district/county units (Taipei's 12 districts included, the
+ * other Taiwan cities have none).
  */
 @RunWith(AndroidJUnit4.class)
 public class RegionCatalogTest {
 
-    private static final int EXPECTED_PROVINCES = 31;
-    private static final int EXPECTED_CITIES = 341;
-    private static final int EXPECTED_DISTRICTS = 3056;
+    private static final int EXPECTED_PROVINCES = 34;
+    private static final int EXPECTED_CITIES = 365;
+    private static final int EXPECTED_DISTRICTS = 3094;
 
     /** Every mainland province-level division, in official code order. */
     private static final String[] ALL_PROVINCES = {
@@ -51,7 +52,7 @@ public class RegionCatalogTest {
             "河南省", "湖北省", "湖南省", "广东省", "广西壮族自治区",
             "海南省", "重庆市", "四川省", "贵州省", "云南省",
             "西藏自治区", "陕西省", "甘肃省", "青海省", "宁夏回族自治区",
-            "新疆维吾尔自治区",
+            "新疆维吾尔自治区", "香港特别行政区", "澳门特别行政区", "台湾省",
     };
 
     private RegionCatalog catalog;
@@ -78,7 +79,7 @@ public class RegionCatalogTest {
     public void asset_listsEveryMainlandProvinceInCodeOrder() {
         assertEquals(EXPECTED_PROVINCES, catalog.provinces().size());
         assertEquals("first province", "北京市", catalog.provinces().get(0));
-        assertEquals("last province", "新疆维吾尔自治区",
+        assertEquals("last province", "台湾省",
                 catalog.provinces().get(catalog.provinces().size() - 1));
         Set<String> present = new HashSet<>(catalog.provinces());
         for (String province : ALL_PROVINCES) {
@@ -146,6 +147,7 @@ public class RegionCatalogTest {
         // WeatherClient splits the saved path on whitespace, so no name may contain
         // any: a space inside a district would silently break coordinate lookup.
         int districtsSeen = 0;
+        int citiesWithoutDistricts = 0;
         for (String province : catalog.provinces()) {
             assertFalse(province.trim().isEmpty());
             List<String> cities = catalog.cities(province);
@@ -153,7 +155,14 @@ public class RegionCatalogTest {
             for (String city : cities) {
                 assertFalse(city.trim().isEmpty());
                 List<String> districts = catalog.districts(province, city);
-                assertFalse(province + " " + city + " has no districts", districts.isEmpty());
+                if (districts.isEmpty()) {
+                    // Allowed for Taiwan's non-Taipei cities: the district level is
+                    // not bundled, the picker hides the third wheel and weather
+                    // resolves by city name. Tracked so a mainland regression (all
+                    // districts gone) would still fail the count below.
+                    citiesWithoutDistricts++;
+                    continue;
+                }
                 for (String district : districts) {
                     assertFalse("blank district in " + province + " " + city,
                             district.trim().isEmpty());
@@ -165,6 +174,8 @@ public class RegionCatalogTest {
             }
         }
         assertEquals(EXPECTED_DISTRICTS, districtsSeen);
+        assertEquals("only Taiwan's non-Taipei cities may lack a district level",
+                21, citiesWithoutDistricts);
     }
 
     // ---- queries must never blow up ----
@@ -349,5 +360,58 @@ public class RegionCatalogTest {
         assertEquals(RegionCatalog.displayName("浙江省", "杭州市", "西湖区"), a.displayName());
         assertNotNull(a.toString());
         assertTrue(a.toString().contains("西湖区"));
+    }
+
+    // ---- Hong Kong / Macao / Taiwan (appended on top of the NBS mainland set) ----
+
+    @Test
+    public void hongKong_hasIts18DistrictsUnderOneCity() {
+        assertEquals(Arrays.asList("香港特别行政区"), catalog.cities("香港特别行政区"));
+        List<String> districts = catalog.districts("香港特别行政区", "香港特别行政区");
+        assertEquals(18, districts.size());
+        assertTrue(districts.contains("中西区"));
+        assertTrue(districts.contains("沙田区"));
+    }
+
+    @Test
+    public void macao_hasIts8Parishes() {
+        List<String> districts = catalog.districts("澳门特别行政区", "澳门特别行政区");
+        assertEquals(8, districts.size());
+        assertTrue(districts.contains("花地玛堂区"));
+        assertTrue(districts.contains("路氹填海区"));
+    }
+
+    @Test
+    public void taiwan_listsIts22CountyLevelCities() {
+        List<String> cities = catalog.cities("台湾省");
+        assertEquals(22, cities.size());
+        assertTrue(cities.contains("台北市"));
+        assertTrue(cities.contains("高雄市"));
+        assertTrue(cities.contains("连江县"));
+    }
+
+    @Test
+    public void taiwan_taipeiHasDistricts_otherCitiesKeepThePickerAtTwoLevels() {
+        List<String> taipei = catalog.districts("台湾省", "台北市");
+        assertEquals(12, taipei.size());
+        assertTrue(taipei.contains("中正区"));
+        assertTrue(taipei.contains("文山区"));
+
+        // No district data for the rest: the picker hides the third wheel instead
+        // of inventing a level, and weather resolves by city name.
+        assertTrue(catalog.districts("台湾省", "高雄市").isEmpty());
+        assertEquals("台湾省 高雄市", RegionCatalog.displayName("台湾省", "高雄市", ""));
+    }
+
+    @Test
+    public void displayName_coversTheAppendedProvinces() {
+        // Hong Kong / Macao fold like municipalities: province == city, so the path
+        // is two segments (same rule as 北京市 朝阳区).
+        assertEquals("香港特别行政区 中西区",
+                RegionCatalog.displayName("香港特别行政区", "香港特别行政区", "中西区"));
+        assertEquals("澳门特别行政区 大堂区",
+                RegionCatalog.displayName("澳门特别行政区", "澳门特别行政区", "大堂区"));
+        assertEquals("台湾省 台北市 中正区",
+                RegionCatalog.displayName("台湾省", "台北市", "中正区"));
     }
 }
