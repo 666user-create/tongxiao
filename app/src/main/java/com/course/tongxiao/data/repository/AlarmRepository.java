@@ -13,14 +13,15 @@ import java.util.List;
 /**
  * Single entry point for alarm reads/writes (design.md §3.3).
  *
- * <p><b>Threading contract.</b> Every method except {@link #observeAll()} is
- * blocking and annotated {@link WorkerThread}; Room throws
+ * <p><b>Threading contract.</b> All DB access methods except {@link #observeAll()}
+ * are blocking and annotated {@link WorkerThread}; Room throws
  * "Cannot access database on the main thread" otherwise. Who calls from where:
  * <ul>
  *   <li>ViewModel (Step 3.1) — its own ExecutorService;</li>
- *   <li>AlarmReceiver / BOOT &amp; TIME_SET receivers (Step 2.2/2.4) — must
- *       {@code goAsync()} or hand off to an ExecutorService, never inline in
- *       {@code onReceive};</li>
+ *   <li>AlarmReceiver / BOOT &amp; TIME_SET receivers (Step 2.2/2.4) — {@code goAsync()}
+ *       only extends the receiver's lifetime, it does NOT switch threads. Hand the
+ *       work to an Executor/IntentService and call {@code finish()} there; never
+ *       call into this class inline in {@code onReceive};</li>
  *   <li>WorkManager self-check (Step 6.4) — already on a background thread.</li>
  * </ul>
  * {@link #observeAll()} returns LiveData and is the only main-thread-safe entry
@@ -87,7 +88,9 @@ public class AlarmRepository {
         final int alarmId = alarm.id;
         return db.runInTransaction(() -> {
             db.alarmEventDao().deleteByAlarm(alarmId);
-            return db.alarmDao().delete(alarm);
+            // Delete by the captured id, not by the (mutable) entity, so events
+            // and row can never target different alarms under a concurrent edit.
+            return db.alarmDao().deleteById(alarmId);
         });
     }
 

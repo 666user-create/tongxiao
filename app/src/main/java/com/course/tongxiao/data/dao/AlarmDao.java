@@ -43,6 +43,14 @@ public interface AlarmDao {
     @Delete
     int delete(Alarm alarm);
 
+    /**
+     * Id-only delete: safe against a caller mutating the entity's id between
+     * reading it and deleting (AlarmRepository captures the id up front).
+     * Same caveat as {@link #delete}: the Repository owns the events cleanup.
+     */
+    @Query("DELETE FROM alarms WHERE id = :id")
+    int deleteById(int id);
+
     /** Live list for the main screen (Step 3.1). */
     @Query("SELECT * FROM alarms ORDER BY hour, minute")
     LiveData<List<Alarm>> observeAll();

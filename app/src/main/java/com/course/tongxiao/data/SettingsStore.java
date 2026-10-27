@@ -1,10 +1,12 @@
 package com.course.tongxiao.data;
 
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.SharedPreferences;
 
 import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
+import androidx.annotation.WorkerThread;
 
 /**
  * SharedPreferences wrapper for app-wide settings (design.md §3.1 tail, §3.2).
@@ -20,9 +22,10 @@ import androidx.annotation.VisibleForTesting;
  *       action, so flipping the switch back does not lose authorizations.</li>
  * </ul>
  *
- * <p>Instantiate once from {@code Application} and reuse: the first
- * {@code getSharedPreferences} call parses XML on the calling thread, which must
- * not happen in an Activity {@code onCreate}.
+ * <p>Construct once from {@code Application} and reuse. The first
+ * {@code getSharedPreferences} call starts an asynchronous load; the first read
+ * blocks until it finishes, so this must not happen lazily inside an Activity
+ * {@code onCreate} (StrictMode disk-read report on the main thread).
  */
 public class SettingsStore {
 
@@ -64,17 +67,25 @@ public class SettingsStore {
         prefs.edit().putString(KEY_CITY, city == null ? "" : city.trim()).apply();
     }
 
-    /**
-     * Settings-page master switch for dorm co-operation (design.md §3.2).
-     * OFF gates remote commands at the protocol layer; it never mutates
-     * grantedMask. Written with commit(): this is a privacy switch, and a
-     * fail-open window after an immediate kill is not acceptable.
-     */
     public boolean isGroupMasterSwitchOn() {
         return prefs.getBoolean(KEY_GROUP_MASTER_ON, true);
     }
 
-    public void setGroupMasterSwitchOn(boolean on) {
-        prefs.edit().putBoolean(KEY_GROUP_MASTER_ON, on).commit();
+    /**
+     * Settings-page master switch for dorm co-operation (design.md §3.2).
+     * OFF gates remote commands at the protocol layer; it never mutates
+     * grantedMask.
+     *
+     * <p>Uses {@code commit()} on purpose: this is a privacy switch, and an
+     * {@code apply()} write still queued when the process dies would come back
+     * ON (fail-open). That costs a synchronous disk write, so the method is
+     * {@link WorkerThread} and returns whether the write actually succeeded.
+     *
+     * @return true when the new value was persisted.
+     */
+    @SuppressLint("ApplySharedPref") // deliberate: durability beats async apply here
+    @WorkerThread
+    public boolean setGroupMasterSwitchOn(boolean on) {
+        return prefs.edit().putBoolean(KEY_GROUP_MASTER_ON, on).commit();
     }
 }

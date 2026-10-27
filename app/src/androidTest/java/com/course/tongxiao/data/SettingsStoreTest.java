@@ -71,10 +71,16 @@ public class SettingsStoreTest {
     }
 
     @Test
-    public void masterSwitch_isWrittenSynchronously() {
-        // Privacy switch uses commit(), so the value is readable immediately and
-        // survives an immediate process kill (no apply() fail-open window).
-        store.setGroupMasterSwitchOn(false);
-        assertEquals(false, prefs.getBoolean("group_master_on", true));
+    public void masterSwitch_returnsPersistedResult_andSurvivesReRead() {
+        // The setter returns commit()'s result, so a failed disk write is visible
+        // to the settings screen instead of failing silently.
+        assertTrue("write should succeed", store.setGroupMasterSwitchOn(false));
+        assertFalse(store.isGroupMasterSwitchOn());
+
+        // Same-file instance sees the new value (SharedPreferences caches per name).
+        Context ctx = ApplicationProvider.getApplicationContext();
+        SettingsStore second = new SettingsStore(
+                ctx.getSharedPreferences(TEST_FILE, Context.MODE_PRIVATE));
+        assertFalse("value visible to a second store instance", second.isGroupMasterSwitchOn());
     }
 }
