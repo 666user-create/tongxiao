@@ -1,0 +1,25 @@
+# Built outputs
+*.apk
+*.aab
+*.dex
+build/
+
+# Gradle
+.gradle/
+local.properties
+
+# IDE
+.idea/
+*.iml
+.DS_Store
+
+# Android
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Logs
+*.log
+
+# G5 verification artifacts
+.g5/

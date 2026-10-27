@@ -1,0 +1,4 @@
+// Root build file. Module config lives in app/build.gradle.
+plugins {
+    id 'com.android.application' version '8.13.2' apply false
+}
