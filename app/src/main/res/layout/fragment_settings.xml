@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:clipToPadding="false">
@@ -39,93 +40,53 @@
             android:textSize="16sp"
             android:textStyle="bold" />
 
-        <include
-            android:id="@+id/settings_weather_status_host"
-            layout="@layout/view_weather_status" />
-
-        <com.google.android.material.textfield.TextInputLayout
+        <TextView
+            android:id="@+id/weather_status"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:hint="@string/settings_city_hint">
-
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/settings_city"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:imeOptions="actionDone"
-                android:inputType="text"
-                android:maxLength="12" />
-
-        </com.google.android.material.textfield.TextInputLayout>
-
-        <com.google.android.material.button.MaterialButtonToggleGroup
-            android:id="@+id/settings_city_chips"
-            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            app:singleSelection="false">
+            android:lineSpacingExtra="3dp"
+            android:textColor="@color/muted"
+            android:textSize="13sp" />
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/chip_city_beijing"
-                style="@style/Widget.Material3.Button.OutlinedButton"
-                android:layout_width="wrap_content"
-                android:layout_height="40dp"
-                android:insetLeft="2dp"
-                android:insetRight="2dp"
-                android:text="@string/city_beijing" />
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/settings_region_pick"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:layout_marginTop="12dp"
+            app:icon="@android:drawable/ic_menu_mylocation"
+            app:iconGravity="textStart"
+            android:text="@string/settings_region_pick" />
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/chip_city_shanghai"
-                style="@style/Widget.Material3.Button.OutlinedButton"
-                android:layout_width="wrap_content"
-                android:layout_height="40dp"
-                android:insetLeft="2dp"
-                android:insetRight="2dp"
-                android:text="@string/city_shanghai" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/chip_city_hangzhou"
-                style="@style/Widget.Material3.Button.OutlinedButton"
-                android:layout_width="wrap_content"
-                android:layout_height="40dp"
-                android:insetLeft="2dp"
-                android:insetRight="2dp"
-                android:text="@string/city_hangzhou" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/chip_city_shenzhen"
-                style="@style/Widget.Material3.Button.OutlinedButton"
-                android:layout_width="wrap_content"
-                android:layout_height="40dp"
-                android:insetLeft="2dp"
-                android:insetRight="2dp"
-                android:text="@string/city_shenzhen" />
-
-        </com.google.android.material.button.MaterialButtonToggleGroup>
-
-        <LinearLayout
+        <TextView
+            android:id="@+id/settings_region_value"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:orientation="horizontal">
+            android:layout_marginTop="10dp"
+            android:lineSpacingExtra="3dp"
+            android:textColor="@color/ink"
+            android:textSize="15sp"
+            tools:text="浙江省 杭州市 西湖区" />
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/settings_city_save"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="@string/settings_city_save" />
+        <TextView
+            android:id="@+id/settings_region_hint"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="@string/settings_region_degraded"
+            android:textColor="@color/muted"
+            android:textSize="12sp"
+            android:visibility="gone" />
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/settings_city_clear"
-                style="@style/Widget.Material3.Button.TextButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:text="@string/settings_city_clear" />
-
-        </LinearLayout>
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/settings_region_clear"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="@string/settings_city_clear"
+            android:textColor="@color/muted" />
 
         <TextView
             android:layout_width="wrap_content"

@@ -66,6 +66,10 @@ public class WeatherClient {
     private static final String TAG = "WeatherClient";
 
     private static final String ENDPOINT = "https://api.open-meteo.com/v1/forecast";
+    private static final String GEOCODE_ENDPOINT = "https://geocoding-api.open-meteo.com/v1/search";
+    private static final int GEOCODE_CACHE_LIMIT = 64;
+    private static final java.util.Map<String, double[]> GEOCODE_CACHE =
+            new java.util.concurrent.ConcurrentHashMap<>();
 
     /** Cached forecast older than this is never used (design.md §5.3). */
     public static final long CACHE_TTL_MILLIS = 24L * 60L * 60L * 1000L;
@@ -102,18 +106,32 @@ public class WeatherClient {
     private final WeatherCacheDao dao;
     private final HttpFetcher fetcher;
     private final Clock clock;
+    /**
+     * When true, an unknown place name is resolved to coordinates through the
+     * Open-Meteo geocoding API. Production needs it (the region picker can yield
+     * thousands of district names); tests keep it off so the existing "unknown
+     * city never hits the network" contract stays intact.
+     */
+    private final boolean geocodeFallback;
 
     /** Production wiring: real HTTP, device clock, "today" in the device time zone. */
     public WeatherClient(@NonNull WeatherCacheDao dao) {
-        this(dao, new HttpUrlFetcher(), Clock.systemDefaultZone());
+        this(dao, new HttpUrlFetcher(), Clock.systemDefaultZone(), true);
     }
 
-    /** Test seam: fake transport and/or a pinned clock. */
+    /** Test seam: fake transport and/or a pinned clock (geocoding disabled). */
     public WeatherClient(@NonNull WeatherCacheDao dao, @NonNull HttpFetcher fetcher,
                          @NonNull Clock clock) {
+        this(dao, fetcher, clock, false);
+    }
+
+    /** Full seam, including the geocoding switch. */
+    public WeatherClient(@NonNull WeatherCacheDao dao, @NonNull HttpFetcher fetcher,
+                         @NonNull Clock clock, boolean geocodeFallback) {
         this.dao = dao;
         this.fetcher = fetcher;
         this.clock = clock;
+        this.geocodeFallback = geocodeFallback;
     }
 
     /**
@@ -132,9 +150,9 @@ public class WeatherClient {
             if (key == null) {
                 return false; // empty city = feature off (SettingsStore.getCity())
             }
-            double[] coordinates = CITY_COORDINATES.get(key);
+            double[] coordinates = coordinatesFor(key);
             if (coordinates == null) {
-                Log.i(TAG, "no built-in coordinates for \"" + key + "\"; weather link stays off");
+                Log.i(TAG, "no coordinates for \"" + key + "\"; weather link stays off");
                 return false;
             }
             String body = fetcher.get(buildUrl(coordinates));
@@ -329,6 +347,94 @@ public class WeatherClient {
                 "%s?latitude=%.4f&longitude=%.4f&daily=weather_code,temperature_2m_min"
                         + "&timezone=auto&forecast_days=2",
                 ENDPOINT, coordinates[0], coordinates[1]);
+    }
+
+    /**
+     * Resolves a stored place name to coordinates.
+     *
+     * <p>The settings value is a region path such as {@code 浙江省 杭州市 西湖区}
+     * (space separated, from the three-level picker). The most specific part wins:
+     * a district is closer to the user than the province, so it is tried first.
+     * Resolution order per candidate: built-in table (suffix stripped, so
+     * {@code 杭州市} matches {@code 杭州}) then, when enabled, the geocoding API.
+     *
+     * @return {@code {latitude, longitude}} or null when nothing resolves
+     */
+    @Nullable
+    private double[] coordinatesFor(@NonNull String key) {
+        String[] parts = key.trim().split("\\s+");
+        for (int i = parts.length - 1; i >= 0; i--) {
+            double[] builtIn = CITY_COORDINATES.get(stripAdminSuffix(parts[i]));
+            if (builtIn != null) {
+                return builtIn;
+            }
+        }
+        if (!geocodeFallback) {
+            return null;
+        }
+        for (int i = parts.length - 1; i >= 0; i--) {
+            double[] resolved = geocode(parts[i]);
+            if (resolved != null) {
+                return resolved;
+            }
+        }
+        return null;
+    }
+
+    /** 浙江省 → 浙江, 杭州市 → 杭州, 西湖区 → 西湖 (only one trailing suffix). */
+    @NonNull
+    private static String stripAdminSuffix(@NonNull String name) {
+        String trimmed = name.trim();
+        for (String suffix : new String[]{"特别行政区", "自治区", "省", "市", "区", "县", "旗"}) {
+            if (trimmed.length() > suffix.length() && trimmed.endsWith(suffix)) {
+                return trimmed.substring(0, trimmed.length() - suffix.length());
+            }
+        }
+        return trimmed;
+    }
+
+    /** Geocoding lookup with a small process-wide cache (avoid one call per refresh). */
+    @Nullable
+    private double[] geocode(@NonNull String place) {
+        double[] cached = GEOCODE_CACHE.get(place);
+        if (cached != null) {
+            return cached;
+        }
+        try {
+            String body = fetcher.get(buildGeocodeUrl(place));
+            JSONObject root = new JSONObject(body);
+            JSONArray results = root.optJSONArray("results");
+            if (results == null || results.length() == 0) {
+                return null;
+            }
+            JSONObject first = results.getJSONObject(0);
+            double latitude = first.getDouble("latitude");
+            double longitude = first.getDouble("longitude");
+            if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+                return null;
+            }
+            double[] coordinates = {latitude, longitude};
+            if (GEOCODE_CACHE.size() > GEOCODE_CACHE_LIMIT) {
+                GEOCODE_CACHE.clear();
+            }
+            GEOCODE_CACHE.put(place, coordinates);
+            return coordinates;
+        } catch (Exception unresolvable) {
+            // Unknown place or offline: no advance rather than a wrong advance.
+            Log.i(TAG, "geocoding failed for \"" + place + "\": " + unresolvable);
+            return null;
+        }
+    }
+
+    private static String buildGeocodeUrl(@NonNull String place) {
+        String encoded;
+        try {
+            encoded = java.net.URLEncoder.encode(place, "UTF-8");
+        } catch (java.io.UnsupportedEncodingException impossible) {
+            encoded = place;
+        }
+        return String.format(Locale.US,
+                "%s?name=%s&count=1&language=zh&format=json", GEOCODE_ENDPOINT, encoded);
     }
 
     @Nullable

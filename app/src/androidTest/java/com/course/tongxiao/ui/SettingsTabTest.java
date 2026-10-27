@@ -18,12 +18,18 @@ import com.course.tongxiao.R;
 import com.course.tongxiao.data.SettingsStore;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 import com.google.android.material.materialswitch.MaterialSwitch;
-import com.google.android.material.textfield.TextInputEditText;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-/** Step 3.3 G5: the settings tab renders and its edits reach SettingsStore. */
+/**
+ * Step 3.3 + region picker: the settings tab renders stored values and the region
+ * selection is an explicit, confirmed action.
+ *
+ * <p>The three-wheel dialog itself is covered by
+ * {@code RegionPickerTest} (it needs the catalog); here we assert the screen
+ * contract: stored region is spelled out, clearing works, holiday state is shown.
+ */
 @RunWith(AndroidJUnit4.class)
 public class SettingsTabTest {
 
@@ -47,20 +53,24 @@ public class SettingsTabTest {
     }
 
     @Test
-    public void settingsTab_showsHolidayStatusAndStoredValues() throws Exception {
+    public void settingsTab_showsStoredRegionAndHolidayState() throws Exception {
         Context ctx = ApplicationProvider.getApplicationContext();
         SettingsStore store = new SettingsStore(ctx);
         String originalCity = store.getCity();
         boolean originalMaster = store.isGroupMasterSwitchOn();
+        store.setCity("浙江省 杭州市 西湖区");
 
         try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
             openSettingsTab(scenario);
 
-            TextInputEditText city = awaitView(scenario, R.id.settings_city, TextInputEditText.class);
-            assertNotNull("settings tab rendered", city);
-            assertEquals("city prefilled from SettingsStore", originalCity, String.valueOf(city.getText()));
+            TextView region = awaitView(scenario, R.id.settings_region_value, TextView.class);
+            assertNotNull("settings tab rendered", region);
+            assertNotNull(region.getText());
+            assertTrue("stored region path must be shown verbatim",
+                    region.getText().toString().contains("西湖区"));
 
-            MaterialSwitch master = awaitView(scenario, R.id.settings_group_master, MaterialSwitch.class);
+            MaterialSwitch master = awaitView(scenario, R.id.settings_group_master,
+                    MaterialSwitch.class);
             assertNotNull(master);
             assertEquals(originalMaster, master.isChecked());
 
@@ -68,57 +78,33 @@ public class SettingsTabTest {
             assertNotNull(holiday);
             assertTrue("holiday status must explain the data state",
                     holiday.getText() != null && holiday.getText().length() > 0);
-        }
-    }
 
-    @Test
-    public void editingCity_persistsToSettingsStore() throws Exception {
-        Context ctx = ApplicationProvider.getApplicationContext();
-        SettingsStore store = new SettingsStore(ctx);
-        String originalCity = store.getCity();
-
-        try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
-            openSettingsTab(scenario);
-            TextInputEditText city = awaitView(scenario, R.id.settings_city, TextInputEditText.class);
-            assertNotNull(city);
-
-            // Typing alone must NOT save (that was the "no sense of completion" bug).
-            scenario.onActivity(activity -> city.setText("杭州"));
-            Thread.sleep(400);
-            assertEquals("typing alone must not persist", originalCity, store.getCity());
-
-            // Explicit save does persist and updates the status line.
-            scenario.onActivity(activity -> activity.findViewById(R.id.settings_city_save).performClick());
-            Thread.sleep(600);
-
-            assertEquals("杭州", store.getCity());
-            TextView status = awaitView(scenario, R.id.weather_status, TextView.class);
-            assertNotNull(status);
-            assertTrue("status line must confirm the saved city",
-                    status.getText().toString().contains("杭州"));
+            View pick = awaitView(scenario, R.id.settings_region_pick, View.class);
+            assertNotNull("region picker entry point exists", pick);
         } finally {
             store.setCity(originalCity);
         }
     }
 
     @Test
-    public void quickCityChip_savesImmediately() throws Exception {
+    public void clearingRegion_turnsWeatherLinkOff() throws Exception {
         Context ctx = ApplicationProvider.getApplicationContext();
         SettingsStore store = new SettingsStore(ctx);
         String originalCity = store.getCity();
+        store.setCity("北京市 朝阳区");
 
         try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
             openSettingsTab(scenario);
-            View chip = awaitView(scenario, R.id.chip_city_beijing, View.class);
-            assertNotNull(chip);
-            scenario.onActivity(activity -> activity.findViewById(R.id.chip_city_beijing).performClick());
-            Thread.sleep(600);
+            TextView region = awaitView(scenario, R.id.settings_region_value, TextView.class);
+            assertNotNull(region);
 
-            assertEquals("北京", store.getCity());
-            TextView status = awaitView(scenario, R.id.weather_status, TextView.class);
-            assertNotNull(status);
-            assertTrue("status line confirms a quick-picked city",
-                    status.getText().toString().contains("北京"));
+            scenario.onActivity(activity ->
+                    activity.findViewById(R.id.settings_region_clear).performClick());
+            Thread.sleep(500);
+
+            assertEquals("clearing must persist an empty region", "", store.getCity());
+            assertTrue("empty state is spelled out",
+                    region.getText().toString().contains("未选择"));
         } finally {
             store.setCity(originalCity);
         }
@@ -137,7 +123,7 @@ public class SettingsTabTest {
             boolean alarmsTabVisible = list.getVisibility() == View.VISIBLE
                     || empty.getVisibility() == View.VISIBLE;
             assertTrue("alarms tab must be the default tab", alarmsTabVisible);
-            View settingsForm = awaitView(scenario, R.id.settings_city, View.class);
+            View settingsForm = awaitView(scenario, R.id.settings_region_pick, View.class);
             assertTrue("settings tab is not the default",
                     settingsForm == null || settingsForm.getVisibility() == View.GONE);
         }
