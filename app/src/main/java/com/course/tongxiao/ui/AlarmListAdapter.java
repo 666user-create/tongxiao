@@ -27,6 +27,11 @@ public class AlarmListAdapter extends ListAdapter<Alarm, AlarmListAdapter.VH> {
         void onEnabledChange(@NonNull Alarm alarm, boolean enabled);
     }
 
+    /** Row tap (Step 3.2): opens the edit screen for that alarm. */
+    public interface OnAlarmClick {
+        void onAlarmClick(@NonNull Alarm alarm);
+    }
+
     private static final DiffUtil.ItemCallback<Alarm> DIFF = new DiffUtil.ItemCallback<>() {
         @Override
         public boolean areItemsTheSame(@NonNull Alarm a, @NonNull Alarm b) {
@@ -50,10 +55,12 @@ public class AlarmListAdapter extends ListAdapter<Alarm, AlarmListAdapter.VH> {
     };
 
     private final OnEnabledChange listener;
+    private final OnAlarmClick clickListener;
 
-    public AlarmListAdapter(OnEnabledChange listener) {
+    public AlarmListAdapter(OnEnabledChange listener, OnAlarmClick clickListener) {
         super(DIFF);
         this.listener = listener;
+        this.clickListener = clickListener;
     }
 
     @NonNull
@@ -65,7 +72,7 @@ public class AlarmListAdapter extends ListAdapter<Alarm, AlarmListAdapter.VH> {
 
     @Override
     public void onBindViewHolder(@NonNull VH holder, int position) {
-        holder.bind(getItem(position), listener);
+        holder.bind(getItem(position), listener, clickListener);
     }
 
     static class VH extends RecyclerView.ViewHolder {
@@ -83,13 +90,16 @@ public class AlarmListAdapter extends ListAdapter<Alarm, AlarmListAdapter.VH> {
             ((android.view.View) toggle).setTag(R.id.alarm_switch, "bound");
         }
 
-        void bind(Alarm alarm, OnEnabledChange listener) {
+        void bind(Alarm alarm, OnEnabledChange listener, OnAlarmClick clickListener) {
             Context ctx = itemView.getContext();
             time.setText(String.format(Locale.CHINA, "%02d:%02d", alarm.hour, alarm.minute));
             label.setText(alarm.label == null || alarm.label.isEmpty()
                     ? ctx.getString(R.string.alarm_default_label) : alarm.label);
             rule.setText(ruleText(ctx, alarm));
             itemView.setAlpha(alarm.enabled ? 1f : 0.5f);
+
+            itemView.setOnClickListener(clickListener == null
+                    ? null : v -> clickListener.onAlarmClick(alarm));
 
             // Detach first: setChecked on a recycled row must not look like a user tap.
             toggle.setOnCheckedChangeListener(null);

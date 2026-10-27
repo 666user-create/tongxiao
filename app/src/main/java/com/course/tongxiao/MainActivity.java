@@ -1,6 +1,7 @@
 package com.course.tongxiao;
 
 import android.Manifest;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
@@ -57,9 +58,18 @@ public class MainActivity extends AppCompatActivity {
                 new AlarmListViewModelFactory(repository, scheduler, resolver))
                 .get(AlarmListViewModel.class);
 
-        adapter = new AlarmListAdapter((alarm, enabled) -> viewModel.setEnabled(alarm, enabled));
+        adapter = new AlarmListAdapter(
+                (alarm, enabled) -> viewModel.setEnabled(alarm, enabled),
+                alarm -> {
+                    Intent edit = new Intent(this, com.course.tongxiao.ui.EditAlarmActivity.class);
+                    edit.putExtra(com.course.tongxiao.ui.EditAlarmActivity.EXTRA_ALARM_ID, alarm.id);
+                    startActivity(edit);
+                });
         list.setLayoutManager(new LinearLayoutManager(this));
         list.setAdapter(adapter);
+
+        findViewById(R.id.add_alarm).setOnClickListener(v ->
+                startActivity(new Intent(this, com.course.tongxiao.ui.EditAlarmActivity.class)));
 
         viewModel.getAlarms().observe(this, this::render);
         viewModel.getTomorrowStatus().observe(this,

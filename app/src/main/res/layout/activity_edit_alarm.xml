@@ -1,0 +1,208 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical">
+
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/edit_toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:background="@color/bg"
+        app:title="@string/edit_title_new"
+        app:titleTextColor="@color/green_primary" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="20dp">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/edit_time"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textSize="56sp"
+                app:rippleColor="@color/green_container"
+                tools:text="07:30" />
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:hint="@string/edit_label_hint">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/edit_label"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="text"
+                    android:maxLength="30" />
+
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:text="@string/edit_repeat_title"
+                android:textColor="@color/ink"
+                android:textStyle="bold" />
+
+            <RadioGroup
+                android:id="@+id/edit_repeat_group"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp">
+
+                <RadioButton
+                    android:id="@+id/repeat_workday_smart"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/edit_repeat_workday_smart" />
+
+                <RadioButton
+                    android:id="@+id/repeat_daily"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/edit_repeat_daily" />
+
+                <RadioButton
+                    android:id="@+id/repeat_custom"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/edit_repeat_custom" />
+
+                <RadioButton
+                    android:id="@+id/repeat_once"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/edit_repeat_once" />
+            </RadioGroup>
+
+            <com.google.android.material.button.MaterialButtonToggleGroup
+                android:id="@+id/edit_day_group"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:visibility="gone"
+                app:singleSelection="false">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/day_mon"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:insetLeft="2dp"
+                    android:insetRight="2dp"
+                    android:padding="0dp"
+                    android:text="@string/day_mon" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/day_tue"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:insetLeft="2dp"
+                    android:insetRight="2dp"
+                    android:padding="0dp"
+                    android:text="@string/day_tue" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/day_wed"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:insetLeft="2dp"
+                    android:insetRight="2dp"
+                    android:padding="0dp"
+                    android:text="@string/day_wed" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/day_thu"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:insetLeft="2dp"
+                    android:insetRight="2dp"
+                    android:padding="0dp"
+                    android:text="@string/day_thu" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/day_fri"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:insetLeft="2dp"
+                    android:insetRight="2dp"
+                    android:padding="0dp"
+                    android:text="@string/day_fri" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/day_sat"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:insetLeft="2dp"
+                    android:insetRight="2dp"
+                    android:padding="0dp"
+                    android:text="@string/day_sat" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/day_sun"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:insetLeft="2dp"
+                    android:insetRight="2dp"
+                    android:padding="0dp"
+                    android:text="@string/day_sun" />
+
+            </com.google.android.material.button.MaterialButtonToggleGroup>
+
+            <com.google.android.material.materialswitch.MaterialSwitch
+                android:id="@+id/edit_skip_holidays"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:visibility="gone"
+                android:text="@string/edit_skip_holidays" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:text="@string/edit_snooze_title"
+                android:textColor="@color/ink"
+                android:textStyle="bold" />
+
+            <com.google.android.material.slider.Slider
+                android:id="@+id/edit_snooze"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:stepSize="5"
+                android:value="10"
+                android:valueFrom="5"
+                android:valueTo="30" />
+
+            <com.google.android.material.materialswitch.MaterialSwitch
+                android:id="@+id/edit_vibrate"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:checked="true"
+                android:text="@string/edit_vibrate" />
+
+        </LinearLayout>
+
+    </ScrollView>
+
+</LinearLayout>

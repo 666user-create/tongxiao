@@ -46,6 +46,17 @@
             android:textSize="15sp"
             android:visibility="gone" />
 
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/add_alarm"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|end"
+            android:layout_margin="20dp"
+            android:contentDescription="@string/alarm_add"
+            app:backgroundTint="@color/green_primary"
+            app:srcCompat="@android:drawable/ic_input_add"
+            app:tint="@color/green_on_primary" />
+
     </FrameLayout>
 
 </LinearLayout>

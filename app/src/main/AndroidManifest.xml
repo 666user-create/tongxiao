@@ -35,6 +35,11 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".ui.EditAlarmActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
+
         <!-- Full-screen stop screen: shown over the keyguard, so no lock-screen
              restrictions may be applied by the system theme. -->
         <activity

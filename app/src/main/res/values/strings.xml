@@ -10,6 +10,31 @@
     <string name="rule_custom_skip_holiday">自定义星期 · 跳过节假日</string>
     <string name="rule_workday_smart">智能工作日 · 节假日跳过</string>
 
+    <!-- Step 3.2 edit screen -->
+    <string name="edit_title_new">新建闹钟</string>
+    <string name="edit_title_edit">编辑闹钟</string>
+    <string name="edit_save">保存</string>
+    <string name="edit_delete">删除</string>
+    <string name="edit_label_hint">闹钟名（可选）</string>
+    <string name="edit_repeat_title">重复</string>
+    <string name="edit_repeat_workday_smart">智能工作日（法定假跳过，补班照常）</string>
+    <string name="edit_repeat_daily">每天</string>
+    <string name="edit_repeat_custom">自定义星期</string>
+    <string name="edit_repeat_once">仅一次</string>
+    <string name="edit_skip_holidays">跳过法定节假日</string>
+    <string name="edit_snooze_title">贪睡间隔（分钟）</string>
+    <string name="edit_vibrate">响铃时振动</string>
+    <string name="edit_need_day">自定义星期至少选一天</string>
+    <string name="edit_time_title">设置时间</string>
+    <string name="alarm_add">新建闹钟</string>
+    <string name="day_mon">一</string>
+    <string name="day_tue">二</string>
+    <string name="day_wed">三</string>
+    <string name="day_thu">四</string>
+    <string name="day_fri">五</string>
+    <string name="day_sat">六</string>
+    <string name="day_sun">日</string>
+
     <string name="alarm_default_label">闹钟</string>
     <string name="stop_ring">停止</string>
     <string name="snooze">稍后提醒</string>
