@@ -25,6 +25,26 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+
+    // Release signing for the course submission. The keystore lives OUTSIDE the
+    // repository (D:\Android\tongxiao-keys\) so it is not published by accident;
+    // the same path can be overridden with -PtongxiaoKeystore=... in CI.
+    signingConfigs {
+        release {
+            storeFile file(project.findProperty('tongxiaoKeystore')
+                    ?: 'D:/Android/tongxiao-keys/tongxiao.jks')
+            storePassword project.findProperty('tongxiaoStorePassword') ?: 'tongxiao2026'
+            keyAlias project.findProperty('tongxiaoKeyAlias') ?: 'tongxiao'
+            keyPassword project.findProperty('tongxiaoKeyPassword') ?: 'tongxiao2026'
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+    }
 }
 
 dependencies {

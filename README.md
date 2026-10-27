@@ -55,7 +55,22 @@ adb install -r app\build\outputs\apk\debug\app-debug.apk
 - **lint**：0 error，仅剩 2 条已知提示（`allowBackup` 在 `allowBackup=false` 下无意义、应用图标待补）
 - 测试策略：纯逻辑（节假日/触发/协议/自适应/统计）用确定性种子与合成数据；涉及系统的（调度/响铃/服务）在模拟器实测并通过 `AlarmManager.getNextAlarmClock()`、`NotificationManager.getActiveNotifications()`、`PendingIntent.FLAG_NO_CREATE` 做"系统真的记住了"级断言
 
-## 5. 已知限制（答辩要能解释）
+## 5. 交付物与签名
+
+| 产物 | 路径 | 说明 |
+|---|---|---|
+| Debug APK | `dist/tongxiao-preview.apk` | 自测用，debug 签名 |
+| **Release APK** | `dist/tongxiao-release.apk` | **提交/演示用**，正式签名（`CN=Tongxiao`） |
+| 签名密钥 | `D:\Android\tongxiao-keys\tongxiao.jks` | **在仓库外**，不进版本库；口令见 build.gradle 的默认值（可 `-P` 覆盖） |
+
+```bat
+gradlew assembleRelease
+adb install -r dist\tongxiao-release.apk
+```
+
+> 重新打包签名：`gradlew assembleRelease -PtongxiaoKeystore=D:/path/x.jks -PtongxiaoStorePassword=***`
+
+## 6. 已知限制（答辩要能解释）
 
 1. **全屏停铃页只在锁屏/熄屏时自动弹出**：Android 10+ 禁止后台直接 `startActivity`，亮屏解锁时走"环形通知 + 停止按钮"。这是平台规范，不是实现缺陷。
 2. **厂商 ROM 杀后台**：需手动加白（自启动/电池优化）；已提供引导与 6h 自检兜底。
@@ -63,7 +78,7 @@ adb install -r app\build\outputs\apk\debug\app-debug.apk
 4. **宿舍互助为局域网**：需同一 Wi-Fi/热点；跨网络不可用（设计取舍：零服务器）。
 5. **节假日数据**：内置到 2026 年；2027 公告发布后需更新 JSON（设置页预留导入入口）。
 
-## 6. 目录
+## 7. 目录
 
 ```
 app/src/main/java/com/course/tongxiao/
@@ -74,5 +89,5 @@ app/src/main/java/com/course/tongxiao/
 ├── ui/         列表/编辑/设置/挑战/统计页与 Fragment
 ├── work/       6h 自检
 ├── provider/   只读 ContentProvider
-docs/           design.md（设计）、plan.md（26 步执行计划）、wrapup-plan.md（收尾计划）、test-report.md
+docs/           design.md（设计）、plan.md（执行计划）、test-report.md（测试报告）、ppt-outline.md（答辩大纲）、demo-script.md（演示脚本）、wrapup-plan.md（收尾计划）
 ```
