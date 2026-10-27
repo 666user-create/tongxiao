@@ -17,6 +17,9 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
 
+    <!-- Registrations do not survive a reboot: rebuild them at boot. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
     <application
         android:allowBackup="false"
         android:label="@string/app_name"
@@ -47,6 +50,19 @@
         <receiver
             android:name=".alarm.AlarmReceiver"
             android:exported="false" />
+
+        <!-- Boot / clock change / timezone change / app update: rebuild schedules. -->
+        <receiver
+            android:name=".alarm.SystemEventReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
 
         <service
             android:name=".alarm.RingService"

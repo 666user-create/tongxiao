@@ -101,6 +101,7 @@ public class AlarmReceiver extends BroadcastReceiver {
             // The user explicitly asked to be woken again; holiday/weekday rules
             // must not swallow that request (it may cross midnight into a holiday).
             recordSnoozeFire(db, alarm, fireAt);
+            preArmNext(db, repository, resolver, appContext, alarm);
             return true;
         }
 
@@ -110,7 +111,29 @@ public class AlarmReceiver extends BroadcastReceiver {
             actions.onSkipped(alarm, fireAt, "rule: holiday/not-today");
             return false;
         }
+
+        preArmNext(db, repository, resolver, appContext, alarm);
         return true;
+    }
+
+    /**
+     * Arms the next occurrence before the ring even starts.
+     *
+     * <p>{@code setAlarmClock} is one-shot: if the process is killed while
+     * ringing, the stop path never runs and the next occurrence would be lost
+     * until the app is opened again. Pre-arming is idempotent — the stop path
+     * simply re-arms the same moment.
+     */
+    private void preArmNext(TongxiaoDb db, AlarmRepository repository, HolidayResolver resolver,
+                            Context appContext, Alarm alarm) {
+        if (alarm.repeatMode == Alarm.RepeatMode.ONCE || !alarm.enabled) {
+            return; // one-shot alarms disable themselves on stop
+        }
+        try {
+            new AlarmScheduler(appContext, repository, resolver).schedule(alarm);
+        } catch (RuntimeException e) {
+            Log.e(TAG, "pre-arm failed for alarm " + alarm.id, e);
+        }
     }
 
     private void recordSnoozeFire(TongxiaoDb db, Alarm alarm, long fireAt) {
