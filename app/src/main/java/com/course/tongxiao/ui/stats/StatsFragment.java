@@ -231,16 +231,20 @@ public class StatsFragment extends Fragment {
         }
         leaderboardRows.removeAllViews();
 
-        addLeaderboardRow(getString(R.string.stats_leaderboard_me),
-                mine.days == 0
-                        ? getString(R.string.stats_leaderboard_no_wake)
-                        : formatClock(mine.medianStopMinuteOfDay),
+        String mineTitle = mine.days == 0
+                ? getString(R.string.stats_leaderboard_no_wake_me)
+                : getString(R.string.stats_leaderboard_row,
+                getString(R.string.stats_leaderboard_me),
+                formatClock(mine.medianStopMinuteOfDay));
+        addLeaderboardRow(mineTitle,
                 getString(R.string.stats_leaderboard_row_detail,
                         mine.snoozeCount, mine.mutedCount, getString(R.string.stats_time_just_now)),
                 false);
 
         if (peers.isEmpty()) {
-            leaderboardEmpty.setVisibility(View.VISIBLE);
+            // Exactly one message: either "join a group" or "waiting for the first
+            // sync". Showing both read like two different problems.
+            leaderboardEmpty.setVisibility(View.GONE);
             leaderboardStatus.setText(hasGroupSession()
                     ? getString(R.string.stats_leaderboard_hint)
                     : getString(R.string.stats_leaderboard_empty_room));
@@ -256,9 +260,10 @@ public class StatsFragment extends Fragment {
             }
             newestReceivedAt = Math.max(newestReceivedAt, peer.receivedAt);
             String wake = peer.hasData()
-                    ? formatClock(peer.medianStopMinute)
-                    : getString(R.string.stats_leaderboard_no_wake);
-            addLeaderboardRow(peer.nick, wake,
+                    ? getString(R.string.stats_leaderboard_row, peer.nick,
+                    formatClock(peer.medianStopMinute))
+                    : getString(R.string.stats_leaderboard_no_wake_short, peer.nick);
+            addLeaderboardRow(wake,
                     getString(R.string.stats_leaderboard_row_detail,
                             peer.snoozeCount, peer.mutedCount, ageText(peer.receivedAt)),
                     peer.stale);
@@ -271,14 +276,14 @@ public class StatsFragment extends Fragment {
                 peers.size(), age, staleCount));
     }
 
-    private void addLeaderboardRow(String name, String wake, String detail, boolean stale) {
+    private void addLeaderboardRow(String titleText, String detail, boolean stale) {
         LinearLayout row = new LinearLayout(requireContext());
         row.setOrientation(LinearLayout.VERTICAL);
         int pad = Math.round(6 * getResources().getDisplayMetrics().density);
         row.setPadding(0, pad, 0, pad);
 
         TextView title = new TextView(requireContext());
-        title.setText(getString(R.string.stats_leaderboard_row, name, wake));
+        title.setText(titleText);
         title.setTextSize(14f);
         title.setTextColor(requireContext().getColor(stale ? R.color.muted : R.color.ink));
 

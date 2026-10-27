@@ -28,7 +28,8 @@
     <string name="stats_leaderboard_row">%1$s · 通常 %2$s 起</string>
     <string name="stats_leaderboard_row_detail">贪睡 %1$d 次 · 被静音 %2$d 次 · %3$s</string>
     <string name="stats_leaderboard_me">我</string>
-    <string name="stats_leaderboard_no_wake">暂无记录</string>
+    <string name="stats_leaderboard_no_wake_short">%1$s</string>
+    <string name="stats_leaderboard_no_wake_me">我 · 暂无记录</string>
     <string name="stats_time_just_now">刚刚</string>
     <string name="stats_time_minutes">%1$d 分钟前</string>
     <string name="stats_time_hours">%1$d 小时前</string>
