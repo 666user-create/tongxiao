@@ -75,16 +75,20 @@
 
 ```
 AlarmManager 到点
-  → AlarmReceiver.onReceive()
-  → HolidayResolver.shouldFire(alarm, today)?
-      ├─ 否 → 写 alarm_events(SKIPPED_HOLIDAY)，不响
+  → AlarmReceiver.onReceive()（仅转发，禁止内联 DB）
+  → 后台线程查 Room 取 Alarm → HolidayResolver.shouldFire(alarm, today)?
+      ├─ 否 → 写 alarm_events(SKIPPED_HOLIDAY) + **重排下一次**，不响
       └─ 是 → WeatherClient 检查提前量（仅智能工作日闹钟）
              → startForegroundService(RingService)
              → RingService: 播放铃声/震动 + 拉起 StopRingActivity(FLAG_SHOW_WHEN_LOCKED)
              → 按配置延迟 N 秒弹 UnlockActivity(挑战)
-             → 挑战通过 / 紧急停止 → 停铃，写 alarm_events(STOPPED)
+             → 挑战通过 / 紧急停止 / 静音 → 停铃，写 alarm_events(STOPPED)
+                 → **重复闹钟（DAILY/CUSTOM/WORKDAY_SMART）：立即 schedule(下一次)**
+                 → **ONCE：置 enabled=false，不再重排**
              → 贪睡 → 重排 setAlarmClock(+snoozeMin)，写 alarm_events(SNOOZE)
 ```
+
+**响后必须重排**：`setAlarmClock` 是一次性注册，`AlarmManager` 不会自己续期。若只依赖 §6.4 的 6h 自检，force-stop 或自检未跑到就会漏响。因此停铃路径（含静音/紧急停止）必须同步调用 `AlarmScheduler.schedule()` 计算下一次；§6.4 自检只作为兜底。
 
 ---
 
@@ -102,7 +106,8 @@ AlarmManager 到点
 | hour / minute | int | |
 | dayMask | int (7bit) | 周一~周日 |
 | repeatMode | enum | ONCE / DAILY / CUSTOM / WORKDAY_SMART |
-| | | **ONCE 语义**：= "下一个该时刻响一次"（今天该时刻未过则今天，否则明天），响后自动置 enabled=false；不按节假日规则跳过（用户显式指定的一次性提醒），但若该日恰为法定假日，UI 询问"顺延到下一工作日？" |
+| | | **ONCE 语义**：= "下一个该时刻响一次"（今天该时刻未过则今天，否则明天），响后自动置 enabled=false；不按节假日规则跳过。v1 不做"顺延到下一工作日"（列入展望）。 |
+| skipHolidays | bool | **仅 CUSTOM 生效**。唯一口径：WORKDAY_SMART 恒按节假日跳（它是"智能工作日"的定义）；DAILY 恒响（"每天"就是每天，含法定假）；ONCE 不看节假日；CUSTOM 由本开关决定。 |
 | skipHolidays | bool | 仅 WORKDAY_SMART/CUSTOM 生效：法定假跳过 |
 | ringtoneUri / vibrate | text / bool | |
 | snoozeMin | int | 贪睡间隔，默认 10 |
@@ -228,15 +233,16 @@ AlarmManager 到点
   ```json
   { "year":2026,
     "holidays":[ {"name":"国庆节","from":"2026-10-01","to":"2026-10-07"} ],
-    "workdays_extra":[ {"date":"2026-09-27","name":"国庆调休补班"} ] }
+    "workdays_extra":[ {"date":"2026-09-20","name":"国庆调休补班"} ] }
   ```
-- 判定 `shouldFire(alarm, date)`（纯函数，单测覆盖）：
-  1. `date ∈ workdays_extra` → **响**（补班日照常，哪怕它是周六）
-  2. `date ∈ holidays` → **跳**（法定假日不响，记 SKIPPED_HOLIDAY）
-  3. 否则按 dayMask 常规判断
-- ONCE 闹钟落在法定假 → 响铃页外弹一次询问"顺延到下一工作日？"（采纳=改 date，拒绝=照旧）
+- 判定 `shouldFire(alarm, date)`（纯函数，单测覆盖），按 repeatMode 分派：
+  - `WORKDAY_SMART`：`date ∈ workdays_extra` → **响**（补班日照常，哪怕周六）；`date ∈ holidays` → **跳**；否则周一~周五响
+  - `CUSTOM`：`skipHolidays=true` 且 `date ∈ holidays` → 跳；否则按 dayMask
+  - `DAILY`：恒响（"每天"含法定假，用户可自行关闭）
+  - `ONCE`：不看节假日，见 §3.1 ONCE 语义
+- v1 **不做**"一次性闹钟顺延到下一工作日"（列入 §11 展望）；`nextWorkdayAfter` 一并移除，避免死代码
 - 更新：设置页"从链接导入 JSON"（URL → HttpURLConnection → schema 校验 → 写 cacheDir 副本，运行时优先读 cache）；每年 11~12 月公告后手动更新，**不依赖任何第三方 API 存活**
-- 兜底：数据缺失/校验失败 → 退化为普通星期逻辑 + 列表页黄条"节假日数据未更新"
+- 兜底：数据缺失**或解析失败** → 退化为普通星期逻辑 + 列表页黄条"节假日数据未更新"（`HolidayCalendar.isDegraded()`）；解析采用"先解析到临时集、成功再合并"，坏文件不会留下半张表
 
 ### 5.2 行为自适应 AdaptiveEngine
 

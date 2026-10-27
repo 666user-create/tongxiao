@@ -16,11 +16,17 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import java.time.LocalDate;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * Step 2.1 G2: HolidayResolver against the bundled 2026 State Council notice
- * (国办发明电〔2025〕7号). Every statutory holiday block and every makeup workday
- * from the notice has at least one assertion here.
+ * (国办发明电〔2025〕7号). Every statutory block and every makeup workday from the
+ * notice has at least one assertion here.
+ *
+ * <p>Counts are asserted as lower bounds so adding 2027 data does not rot this
+ * test; year-exact facts are asserted per date instead.
  */
 @RunWith(AndroidJUnit4.class)
 public class HolidayResolverTest {
@@ -29,7 +35,7 @@ public class HolidayResolverTest {
     private HolidayResolver resolver;
 
     @Before
-    public void setUp() throws Exception {
+    public void setUp() {
         Context ctx = ApplicationProvider.getApplicationContext();
         calendar = HolidayCalendar.loadFromAssets(ctx);
         resolver = new HolidayResolver(calendar);
@@ -39,10 +45,10 @@ public class HolidayResolverTest {
         return LocalDate.parse(iso);
     }
 
-    private static Alarm workdaySmart(int dayMask, boolean skipHolidays) {
+    private static Alarm workdaySmart(boolean skipHolidays) {
         Alarm a = new Alarm();
         a.repeatMode = Alarm.RepeatMode.WORKDAY_SMART;
-        a.dayMask = dayMask;
+        a.dayMask = 0;
         a.skipHolidays = skipHolidays;
         return a;
     }
@@ -51,15 +57,14 @@ public class HolidayResolverTest {
 
     @Test
     public void asset_parsesNoticeTotals() {
-        assertEquals("33 statutory holiday days in 2026", 33, calendar.holidayCount());
-        assertEquals("6 makeup workdays in 2026", 6, calendar.makeupCount());
-        assertTrue(calendar.hasDataFor(2026));
-        assertFalse("2027 notice not published yet", calendar.hasDataFor(2027));
+        assertTrue("at least the 33 statutory days of 2026", calendar.holidayCount() >= 33);
+        assertTrue("at least the 6 makeup workdays of 2026", calendar.makeupCount() >= 6);
+        assertTrue("2026 data present", calendar.hasDataFor(2026));
+        assertFalse("bundled files must parse", calendar.isDegraded());
     }
 
     @Test
     public void asset_holidayBlockBoundaries() {
-        // One day inside each block, plus a day right after it.
         String[] inside = {
                 "2026-01-01", "2026-02-15", "2026-04-04",
                 "2026-05-01", "2026-06-19", "2026-09-25", "2026-10-01"
@@ -91,20 +96,25 @@ public class HolidayResolverTest {
         for (String s : makeup) {
             LocalDate date = d(s);
             assertTrue(s + " is a makeup workday", resolver.isMakeupWorkday(date));
-            assertTrue(s + " must still ring", resolver.shouldFire(workdaySmart(0, true), date));
+            assertTrue(s + " must still ring",
+                    resolver.shouldFire(workdaySmart(true), date));
         }
     }
 
-    // ---- statutory holidays skip ----
+    // ---- statutory holidays skip (WORKDAY_SMART) ----
 
     @Test
-    public void statutoryHolidays_skipSmartWorkdayAlarm() {
+    public void statutoryHolidays_skipSmartWorkdayAlarm_regardlessOfSkipFlag() {
         String[] holidays = {
                 "2026-01-01", "2026-02-17", "2026-04-06",
                 "2026-05-05", "2026-06-20", "2026-09-26", "2026-10-07",
         };
         for (String s : holidays) {
-            assertFalse(s + " must not ring", resolver.shouldFire(workdaySmart(0x7F, true), d(s)));
+            assertFalse(s + " must not ring (skipHolidays=true)",
+                    resolver.shouldFire(workdaySmart(true), d(s)));
+            // WORKDAY_SMART is always holiday-aware: the flag does not apply.
+            assertFalse(s + " must not ring (skipHolidays=false)",
+                    resolver.shouldFire(workdaySmart(false), d(s)));
         }
     }
 
@@ -112,50 +122,51 @@ public class HolidayResolverTest {
 
     @Test
     public void plainWeekdays_ringAndPlainWeekendsDoNot() {
-        assertTrue("普通周三", resolver.shouldFire(workdaySmart(0, true), d("2026-10-14")));
-        assertFalse("普通周六", resolver.shouldFire(workdaySmart(0, true), d("2026-10-17")));
-        assertFalse("普通周日", resolver.shouldFire(workdaySmart(0, true), d("2026-10-18")));
+        assertTrue("普通周三", resolver.shouldFire(workdaySmart(true), d("2026-10-14")));
+        assertFalse("普通周六", resolver.shouldFire(workdaySmart(true), d("2026-10-17")));
+        assertFalse("普通周日", resolver.shouldFire(workdaySmart(true), d("2026-10-18")));
     }
 
     @Test
     public void workdaySmart_ignoresDayMask() {
-        // dayMask=0 would exclude every weekday, yet smart mode must ignore it.
-        assertTrue(resolver.shouldFire(workdaySmart(0, true), d("2026-10-14")));
+        Alarm a = workdaySmart(true);
+        a.dayMask = 0; // would exclude every weekday if it were consulted
+        assertTrue(resolver.shouldFire(a, d("2026-10-14")));
     }
 
-    // ---- skipHolidays=false keeps ringing ----
+    // ---- CUSTOM: skipHolidays is the only mode where the flag matters ----
 
     @Test
-    public void customMode_skipHolidaysFalse_firesOnHoliday() {
+    public void customMode_skipHolidaysFlagControlsHolidayFiring() {
         Alarm a = new Alarm();
         a.repeatMode = Alarm.RepeatMode.CUSTOM;
-        a.dayMask = 0;
+        a.dayMask = 1 << 5; // Saturday
+        LocalDate saturdayHoliday = d("2026-10-03");
+
         a.skipHolidays = false;
-        LocalDate saturdayHoliday = d("2026-10-03"); // Saturday inside National Day
-        // Mark Saturday (bit5) so the weekday rule would allow it.
-        a.dayMask = 1 << 5;
-        assertTrue("skipHolidays=false keeps the alarm", resolver.shouldFire(a, saturdayHoliday));
+        assertTrue("skipHolidays=false keeps the alarm",
+                resolver.shouldFire(a, saturdayHoliday));
 
         a.skipHolidays = true;
-        assertFalse("skipHolidays=true suppresses it", resolver.shouldFire(a, saturdayHoliday));
+        assertFalse("skipHolidays=true suppresses it",
+                resolver.shouldFire(a, saturdayHoliday));
     }
 
     @Test
-    public void dailyMode_respectsSkipHolidays() {
+    public void dailyMode_alwaysRings_evenOnHolidays() {
         Alarm a = new Alarm();
         a.repeatMode = Alarm.RepeatMode.DAILY;
-        a.skipHolidays = true;
-        assertFalse(resolver.shouldFire(a, d("2026-10-01")));
-
-        a.skipHolidays = false;
-        assertTrue(resolver.shouldFire(a, d("2026-10-01")));
+        a.skipHolidays = true; // irrelevant for DAILY
+        assertTrue("DAILY means every day, holidays included",
+                resolver.shouldFire(a, d("2026-10-01")));
+        assertTrue(resolver.shouldFire(a, d("2026-02-17")));
     }
 
     @Test
-    public void onceMode_leavesDateMatchingToScheduler() {
+    public void onceMode_leavesDateSelectionToScheduler() {
         Alarm a = new Alarm();
         a.repeatMode = Alarm.RepeatMode.ONCE;
-        assertTrue("ONCE fires on its own date; scheduler compares dates",
+        assertTrue("ONCE never consults the holiday table here",
                 resolver.shouldFire(a, d("2026-10-01")));
     }
 
@@ -163,31 +174,40 @@ public class HolidayResolverTest {
 
     @Test
     public void unknownYear_degradesToPlainWeekdayLogic() {
-        LocalDate lunarNewYear2027 = d("2027-02-06"); // Saturday
-        assertFalse("no 2027 data", resolver.hasDataFor(lunarNewYear2027));
-        assertFalse("weekend stays weekend", resolver.shouldFire(workdaySmart(0, true), lunarNewYear2027));
-        assertTrue("a 2027 Wednesday still rings",
-                resolver.shouldFire(workdaySmart(0, true), d("2027-02-10")));
-    }
-
-    // ---- next-workday deferral ----
-
-    @Test
-    public void nextWorkdayAfter_skipsNationalDayBlock() {
-        assertEquals("from Sep 30 → Oct 8", d("2026-10-08"),
-                resolver.nextWorkdayAfter(d("2026-09-30")));
-        assertEquals("from Oct 1 → Oct 8", d("2026-10-08"),
-                resolver.nextWorkdayAfter(d("2026-10-01")));
-        assertEquals("from Friday Oct 16 → Monday Oct 19", d("2026-10-19"),
-                resolver.nextWorkdayAfter(d("2026-10-16")));
+        LocalDate monday2027 = d("2027-02-08");
+        assertFalse("no 2027 notice bundled yet", resolver.hasDataFor(monday2027));
+        assertTrue("a 2027 Monday still rings",
+                resolver.shouldFire(workdaySmart(true), monday2027));
+        assertFalse("a 2027 Saturday still does not",
+                resolver.shouldFire(workdaySmart(true), d("2027-02-13")));
     }
 
     @Test
-    public void smartWorkday_definition() {
-        assertTrue("makeup Sunday is a workday", resolver.isSmartWorkday(d("2026-01-04")));
-        assertFalse("holiday Thursday is not", resolver.isSmartWorkday(d("2026-10-01")));
-        assertTrue("plain Wednesday is", resolver.isSmartWorkday(d("2026-10-14")));
-        assertFalse("plain Saturday is not", resolver.isSmartWorkday(d("2026-10-17")));
+    public void malformedDocument_degradesWithoutHalfTable() throws Exception {
+        HolidayCalendar broken = HolidayCalendar.of(null, null, null);
+        boolean threw = false;
+        try {
+            broken.mergeJson("{ not json ");
+        } catch (java.io.IOException expected) {
+            threw = true;
+        }
+        assertTrue("malformed JSON surfaces as IOException", threw);
+        assertEquals("no partial rows committed", 0, broken.holidayCount());
+        assertFalse("failed year not marked as loaded", broken.hasDataFor(2026));
+    }
+
+    // ---- makeup day wins over holiday on a synthetic collision ----
+
+    @Test
+    public void synthetic_dateThatIsBothHolidayAndMakeupDay_rings() {
+        LocalDate collision = LocalDate.parse("2026-10-10");
+        Set<LocalDate> holidays = new HashSet<>(Collections.singletonList(collision));
+        Set<LocalDate> makeup = new HashSet<>(Collections.singletonList(collision));
+        Set<Integer> years = new HashSet<>(Collections.singletonList(2026));
+        HolidayResolver synthetic = new HolidayResolver(HolidayCalendar.of(holidays, makeup, years));
+
+        assertTrue("makeup workday wins over holiday",
+                synthetic.shouldFire(workdaySmart(true), collision));
     }
 
     @Test

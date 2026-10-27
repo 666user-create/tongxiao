@@ -8,10 +8,16 @@ import java.time.LocalDate;
 /**
  * Pure decision logic: does an alarm fire on a given date? (design.md §5.1)
  *
- * <p>Priority is fixed and tested: makeup workday wins (rings even on a
- * Saturday), then statutory holiday (skipped when the alarm asks for it),
- * then the plain weekday rule. A year without holiday data degrades to plain
- * weekday logic.
+ * <p>Single source of truth for {@code skipHolidays} (design.md §3.1):
+ * <ul>
+ *   <li>{@code WORKDAY_SMART} — always holiday-aware: makeup workday rings,
+ *       statutory holiday skips, otherwise Mon–Fri. No user switch.</li>
+ *   <li>{@code CUSTOM} — honours {@code skipHolidays} if set, then dayMask.</li>
+ *   <li>{@code DAILY} — always rings, holidays included ("every day" means
+ *       every day).</li>
+ *   <li>{@code ONCE} — returns true here; the scheduler picks the next
+ *       occurrence of its clock time and never consults holidays.</li>
+ * </ul>
  */
 public class HolidayResolver {
 
@@ -45,23 +51,18 @@ public class HolidayResolver {
         return dow != DayOfWeek.SATURDAY && dow != DayOfWeek.SUNDAY;
     }
 
-    /** True when the year's notice is missing → callers show the degraded banner. */
+    /** True when the year's notice is missing or unreadable → UI shows the banner. */
     public boolean hasDataFor(LocalDate date) {
         return calendar.hasDataFor(date.getYear());
     }
 
-    /**
-     * Should this alarm ring on {@code date}?
-     *
-     * <p>ONCE alarms return true here: whether the date matches is the
-     * scheduler's job (exact-date comparison), not a weekday rule.
-     */
+    /** Should this alarm ring on {@code date}? See the mode table in the class doc. */
     public boolean shouldFire(Alarm alarm, LocalDate date) {
         switch (alarm.repeatMode) {
             case ONCE:
                 return true;
             case DAILY:
-                return !alarm.skipHolidays || !calendar.isStatutoryHoliday(date);
+                return true;
             case CUSTOM: {
                 if (alarm.skipHolidays && calendar.isStatutoryHoliday(date)) {
                     return false;
@@ -78,20 +79,5 @@ public class HolidayResolver {
     static boolean isDayMaskSet(int dayMask, DayOfWeek dow) {
         int bit = dow.getValue() - 1; // Mon=1 -> bit0
         return (dayMask & (1 << bit)) != 0;
-    }
-
-    /**
-     * Next smart workday strictly after {@code date}. Used when a one-shot alarm
-     * lands inside a holiday and the user accepts "move to next workday".
-     */
-    public LocalDate nextWorkdayAfter(LocalDate date) {
-        LocalDate d = date.plusDays(1);
-        for (int guard = 0; guard < 30; guard++) {
-            if (isSmartWorkday(d)) {
-                return d;
-            }
-            d = d.plusDays(1);
-        }
-        return d; // pathological data; caller shows it as-is
     }
 }

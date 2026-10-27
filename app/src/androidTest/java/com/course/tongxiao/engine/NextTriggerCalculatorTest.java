@@ -15,11 +15,13 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 
 /**
- * Step 2.2 G2: next-trigger decision table, including the 2026 holiday blocks
- * and the makeup-workday override.
+ * Step 2.2 G2: next-trigger decision table, including the 2026 holiday blocks,
+ * the makeup-workday override and the "strictly after now" boundary.
  */
 @RunWith(AndroidJUnit4.class)
 public class NextTriggerCalculatorTest {
@@ -27,7 +29,7 @@ public class NextTriggerCalculatorTest {
     private NextTriggerCalculator calc;
 
     @Before
-    public void setUp() throws Exception {
+    public void setUp() {
         Context ctx = ApplicationProvider.getApplicationContext();
         calc = new NextTriggerCalculator(
                 new HolidayResolver(HolidayCalendar.loadFromAssets(ctx)));
@@ -62,6 +64,20 @@ public class NextTriggerCalculatorTest {
     }
 
     @Test
+    public void workdaySmart_exactNowIsNotAFireTime_strictlyAfter() {
+        Alarm a = alarm(Alarm.RepeatMode.WORKDAY_SMART, 7, 0, 0, true);
+        assertEquals("now == trigger must roll to next workday",
+                at("2026-10-15T07:00"), calc.nextTrigger(a, at("2026-10-14T07:00")));
+    }
+
+    @Test
+    public void once_exactNowIsNotAFireTime() {
+        Alarm a = alarm(Alarm.RepeatMode.ONCE, 7, 0, 0, true);
+        assertEquals("now == trigger → tomorrow",
+                at("2026-10-15T07:00"), calc.nextTrigger(a, at("2026-10-14T07:00")));
+    }
+
+    @Test
     public void workdaySmart_fridayEvening_skipsWeekend() {
         Alarm a = alarm(Alarm.RepeatMode.WORKDAY_SMART, 7, 0, 0, true);
         assertEquals("Fri 20:00 → Mon 07:00",
@@ -92,11 +108,9 @@ public class NextTriggerCalculatorTest {
     }
 
     @Test
-    public void daily_skipsHolidaysWhenAsked() {
+    public void daily_ringsOnHolidaysToo() {
         Alarm a = alarm(Alarm.RepeatMode.DAILY, 7, 0, 0, true);
-        assertEquals(at("2026-10-08T07:00"), calc.nextTrigger(a, at("2026-09-30T20:00")));
-
-        a.skipHolidays = false;
+        // DAILY means every day: National Day included, no skip.
         assertEquals(at("2026-10-01T07:00"), calc.nextTrigger(a, at("2026-09-30T20:00")));
     }
 
@@ -116,12 +130,23 @@ public class NextTriggerCalculatorTest {
     }
 
     @Test
-    public void millis_matchesLocalDateTimeInSystemZone() {
+    public void millis_isStrictlyAfterNowAndInSystemZone() {
         Alarm a = alarm(Alarm.RepeatMode.WORKDAY_SMART, 7, 0, 0, true);
-        long millis = calc.nextTriggerMillis(a, at("2026-10-14T06:00"));
-        assertEquals(at("2026-10-14T07:00")
-                        .atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli(),
-                millis);
-        assertNotNull(calc.nextTrigger(a, at("2026-10-14T06:00")));
+        LocalDateTime now = at("2026-10-14T06:00");
+        long millis = calc.nextTriggerMillis(a, now);
+
+        ZoneId zone = ZoneId.systemDefault();
+        assertTrue2("trigger strictly after now",
+                millis > now.atZone(zone).toInstant().toEpochMilli());
+        LocalDateTime back = LocalDateTime.ofInstant(Instant.ofEpochMilli(millis), zone);
+        assertEquals("07:00 local", 7, back.getHour());
+        assertEquals("same local day", 14, back.getDayOfMonth());
+        assertNotNull(calc.nextTrigger(a, now));
+    }
+
+    private static void assertTrue2(String message, boolean condition) {
+        if (!condition) {
+            throw new AssertionError(message);
+        }
     }
 }

@@ -1,11 +1,15 @@
 package com.course.tongxiao.alarm;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import android.app.AlarmManager;
+import android.app.PendingIntent;
 import android.content.Context;
+import android.content.Intent;
 
 import androidx.room.Room;
 import androidx.test.core.app.ApplicationProvider;
@@ -19,16 +23,23 @@ import com.course.tongxiao.engine.HolidayResolver;
 import com.course.tongxiao.engine.NextTriggerCalculator;
 
 import org.junit.After;
+import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Step 2.2 G2/G5: the system really holds the registration we think it does.
- * Assertions go through {@link AlarmManager#getNextAlarmClock()} — the same data
- * `dumpsys alarm` prints — so this is stronger than "no exception thrown".
+ *
+ * <p>Assertions read {@link AlarmManager#getNextAlarmClock()} (same state
+ * `dumpsys alarm` prints) and probe our own PendingIntents with
+ * {@code FLAG_NO_CREATE}, so "registered" and "gone" are both evidenced.
+ * Exact-alarm assertions use {@code Assume} so a revoked-permission device
+ * reports a skip instead of a silent pass.
  */
 @RunWith(AndroidJUnit4.class)
 public class AlarmSchedulerTest {
@@ -38,10 +49,12 @@ public class AlarmSchedulerTest {
     private AlarmScheduler scheduler;
     private AlarmManager alarmManager;
     private NextTriggerCalculator calc;
+    private Context ctx;
+    private final List<Alarm> created = new ArrayList<>();
 
     @Before
-    public void setUp() throws Exception {
-        Context ctx = ApplicationProvider.getApplicationContext();
+    public void setUp() {
+        ctx = ApplicationProvider.getApplicationContext();
         db = Room.inMemoryDatabaseBuilder(ctx, TongxiaoDb.class).build();
         repo = new AlarmRepository(db);
 
@@ -53,79 +66,129 @@ public class AlarmSchedulerTest {
 
     @After
     public void tearDown() {
-        // Leave no real registration behind for the next test or the system UI.
-        for (Alarm a : repo.getAll()) {
+        for (Alarm a : created) {
             scheduler.cancel(a);
         }
         db.close();
     }
 
-    private Alarm insertWorkdayAlarm(String label, int hour, int minute) {
+    /**
+     * DAILY alarm two hours from now: far away from any hour boundary so the
+     * test cannot race a real trigger or a "now == trigger" edge.
+     */
+    private Alarm insertDailySoon() {
+        LocalDateTime target = LocalDateTime.now().plusHours(2).withSecond(0).withNano(0);
         Alarm a = new Alarm();
-        a.label = label;
-        a.repeatMode = Alarm.RepeatMode.WORKDAY_SMART;
-        a.hour = hour;
-        a.minute = minute;
+        a.label = "测试";
+        a.repeatMode = Alarm.RepeatMode.DAILY;
+        a.hour = target.getHour();
+        a.minute = target.getMinute();
         a.enabled = true;
         long rowId = repo.insert(a);
         a.id = (int) rowId; // Room does not back-fill; the scheduler needs the id
+        created.add(a);
         return a;
     }
 
+    /** Does our PendingIntent for this alarm exist right now? */
+    private boolean hasPendingAlarm(Alarm alarm) {
+        Intent intent = new Intent(ctx, AlarmReceiver.class)
+                .setAction(AlarmIntents.ACTION_FIRE_ALARM)
+                .putExtra(AlarmIntents.EXTRA_ALARM_ID, alarm.id)
+                .putExtra(AlarmIntents.EXTRA_ALARM_UID, alarm.uid);
+        PendingIntent pi = PendingIntent.getBroadcast(
+                ctx, alarm.id, intent,
+                PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_NO_CREATE);
+        return pi != null;
+    }
+
     @Test
-    public void schedule_registersAnAlarmClock() {
-        Alarm a = insertWorkdayAlarm("早八", 7, 0);
+    public void schedule_registersAnAlarmClock_andCreatesOurPendingIntent() {
+        Alarm a = insertDailySoon();
 
         long triggerAt = scheduler.schedule(a);
-        assertTrue("schedule returns a future trigger", triggerAt > System.currentTimeMillis());
 
-        if (scheduler.canScheduleExactAlarms()) {
-            AlarmManager.AlarmClockInfo info = alarmManager.getNextAlarmClock();
-            assertNotNull("system must expose our alarm clock", info);
-            assertEquals("registered trigger matches our calculation",
-                    calc.nextTriggerMillis(a, LocalDateTime.now()), info.getTriggerTime());
-        }
+        assertTrue("future trigger returned", triggerAt > System.currentTimeMillis());
+        assertTrue("our PendingIntent exists", hasPendingAlarm(a));
+
+        Assume.assumeTrue("device grants exact alarms", scheduler.canScheduleExactAlarms());
+        AlarmManager.AlarmClockInfo info = alarmManager.getNextAlarmClock();
+        assertNotNull("system exposes an alarm clock", info);
+        assertEquals("registered trigger matches our calculation",
+                calc.nextTriggerMillis(a, LocalDateTime.now()), info.getTriggerTime());
     }
 
     @Test
-    public void reschedule_sameAlarmIsIdempotent() {
-        Alarm a = insertWorkdayAlarm("早八", 7, 0);
-
+    public void reschedule_sameAlarmIsIdempotent_andNewTimeReplacesOld() {
+        Alarm a = insertDailySoon();
         long first = scheduler.schedule(a);
-        long second = scheduler.schedule(a);
-        assertEquals("re-scheduling replaces, never stacks", first, second);
 
-        if (scheduler.canScheduleExactAlarms()) {
-            assertNotNull(alarmManager.getNextAlarmClock());
-            assertEquals(first, alarmManager.getNextAlarmClock().getTriggerTime());
-        }
+        // Move the alarm one hour later and schedule again: the registration must
+        // move, not stack a second one.
+        a.hour = (a.hour + 1) % 24;
+        repo.update(a);
+        long second = scheduler.schedule(a);
+
+        assertTrue("new trigger differs from old", second != first);
+        assertEquals("matches calculation for the new time",
+                calc.nextTriggerMillis(a, LocalDateTime.now()), second);
+
+        Assume.assumeTrue("device grants exact alarms", scheduler.canScheduleExactAlarms());
+        assertEquals("system now holds only the new time",
+                second, alarmManager.getNextAlarmClock().getTriggerTime());
     }
 
     @Test
-    public void cancel_removesRegistration() {
-        Alarm a = insertWorkdayAlarm("跑步", 6, 0);
+    public void cancel_removesRegistrationAndPendingIntent() {
+        Alarm a = insertDailySoon();
         scheduler.schedule(a);
-        assertNotNull("registered before cancel", alarmManager.getNextAlarmClock());
+        assertTrue(hasPendingAlarm(a));
 
         scheduler.cancel(a);
 
-        if (scheduler.canScheduleExactAlarms()) {
-            AlarmManager.AlarmClockInfo info = alarmManager.getNextAlarmClock();
-            assertTrue("no clock registration left for this alarm",
-                    info == null || info.getTriggerTime() != calc.nextTriggerMillis(a, LocalDateTime.now()));
-        }
+        assertFalse("PendingIntent gone", hasPendingAlarm(a));
+        Assume.assumeTrue("device grants exact alarms", scheduler.canScheduleExactAlarms());
+        AlarmManager.AlarmClockInfo info = alarmManager.getNextAlarmClock();
+        assertTrue("no clock registration left for this alarm",
+                info == null || info.getTriggerTime() != calc.nextTriggerMillis(a, LocalDateTime.now()));
     }
 
     @Test
-    public void rescheduleAll_schedulesOnlyEnabled() {
-        Alarm enabled = insertWorkdayAlarm("开", 6, 0);
-        Alarm disabled = insertWorkdayAlarm("关", 7, 0);
-        repo.setEnabled(disabled.id, false);
+    public void schedule_disabledAlarm_neverRegisters() {
+        Alarm a = insertDailySoon();
+        a.enabled = false;
 
+        long triggerAt = scheduler.schedule(a);
+
+        assertEquals("disabled alarms are not scheduled", -1L, triggerAt);
+        assertFalse("no registration created", hasPendingAlarm(a));
+    }
+
+    @Test
+    public void rescheduleAll_dropsStaleRegistrationOfNewlyDisabledAlarm() {
+        Alarm enabled = insertDailySoon();
+        Alarm disabledLater = insertDailySoon();
+        disabledLater.hour = (disabledLater.hour + 1) % 24;
+        repo.update(disabledLater);
+
+        // Both registered first...
+        assertTrue(scheduler.schedule(enabled) > 0);
+        assertTrue(scheduler.schedule(disabledLater) > 0);
+        assertTrue(hasPendingAlarm(enabled));
+        assertTrue(hasPendingAlarm(disabledLater));
+
+        // ...then one is switched off and a full sweep runs.
+        repo.setEnabled(disabledLater.id, false);
+        disabledLater.enabled = false;
         int scheduled = scheduler.rescheduleAll();
 
-        assertEquals("only the enabled alarm is (re)scheduled", 1, scheduled);
-        assertTrue(repo.getEnabled().size() == 1);
-        assertTrue(enabled.id != disabled.id);
+        assertEquals("only the enabled alarm is scheduled", 1, scheduled);
+        assertTrue("enabled registration kept", hasPendingAlarm(enabled));
+        assertFalse("stale registration of disabled alarm dropped", hasPendingAlarm(disabledLater));
+
+        assertNotNull("enabled alarm still in repository", repo.getEnabled().isEmpty()
+                ? null : enabled);
+        assertNull("disabled alarm not in enabled list",
+                repo.getEnabled().stream().filter(x -> x.id == disabledLater.id).findFirst().orElse(null));
     }
 }

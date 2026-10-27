@@ -40,7 +40,8 @@ public class Alarm {
     @NonNull
     public RepeatMode repeatMode = RepeatMode.WORKDAY_SMART;
 
-    /** Skip statutory holidays (WORKDAY_SMART/CUSTOM only). */
+    /** Skip statutory holidays. <b>Only meaningful for {@link RepeatMode#CUSTOM}</b>:
+     *  WORKDAY_SMART is always holiday-aware and DAILY always rings (design.md §3.1). */
     public boolean skipHolidays = true;
 
     public String ringtoneUri;
