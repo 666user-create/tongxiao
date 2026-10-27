@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Material 清新 (style 3) palette, mirrored from ui-preview/03-material-fresh.css -->
+<!-- Material 清新 (style 3) palette, from ui-preview/styles/3.css
+     (green_container = .av background #C8E6C9, a Material-3 role derivation). -->
 <resources>
     <color name="green_primary">#006D40</color>
     <color name="green_on_primary">#FFFFFF</color>

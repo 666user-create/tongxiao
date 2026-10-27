@@ -2,9 +2,8 @@
 <resources>
     <!-- Light-locked: style 3 (Material 清新) is a light scheme; dark theme is out of v1 scope. -->
     <style name="Theme.Tongxiao" parent="Theme.Material3.Light.NoActionBar">
-        <!-- Edge-to-edge on API 35+: status/nav bar icons must be dark for the light scheme. -->
+        <!-- Edge-to-edge on API 35+: status bar icons must be dark for the light scheme. -->
         <item name="android:windowLightStatusBar">true</item>
-        <item name="android:windowLightNavigationBar">true</item>
         <item name="colorPrimary">@color/green_primary</item>
         <item name="colorOnPrimary">@color/green_on_primary</item>
         <item name="colorPrimaryContainer">@color/green_container</item>

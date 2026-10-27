@@ -9,7 +9,7 @@
 
 | 关卡 | 内容 | 防什么 |
 |---|---|---|
-| G1 构建 | `gradlew assembleDebug` 零错误零新警告 | 编译期低级错误 |
+| G1 构建 | `gradlew build`（含 lintDebug，**不止 assembleDebug**）零错误零新警告 | 编译期低级错误、lint NewApi 类阻断（Step 1.1 教训） |
 | G2 单测 | 该步骤声明的单元测试全绿；纯逻辑必须先写测试再写实现 | 逻辑错误、回归 |
 | G3 范围自查 | diff 只含本步骤文件；无计划外抽象/配置项；命名与 design.md 术语一致（Alarm 不叫 Reminder、grantedMask 不叫 permission） | 顺手改出的隐性破坏、过度设计 |
 | G4 独立评审 | 用 fresh-eyes 评审代理审本步 diff，按下方「G4 评审清单（8 问）」出【问题/严重度】列表；高危问题清零后才能提交 | 自己看不见的盲点 |

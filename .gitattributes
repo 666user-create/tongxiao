@@ -1,0 +1,4 @@
+# Normalize line endings; keep the POSIX wrapper runnable on Linux/macOS clones.
+* text=auto
+gradlew text eol=lf
+*.bat text eol=crlf

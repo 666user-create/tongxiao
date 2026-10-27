@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- API 27+ only: windowLightNavigationBar is @RequiresApi(27).
+         Kept out of default values/ so lint NewApi passes at minSdk 26. -->
+    <style name="Theme.Tongxiao" parent="Theme.Material3.Light.NoActionBar">
+        <item name="colorPrimary">@color/green_primary</item>
+        <item name="colorOnPrimary">@color/green_on_primary</item>
+        <item name="colorPrimaryContainer">@color/green_container</item>
+        <item name="colorOnPrimaryContainer">@color/green_on_container</item>
+        <item name="android:colorBackground">@color/bg</item>
+        <item name="colorSurface">@color/card</item>
+        <item name="colorOnSurface">@color/ink</item>
+        <item name="colorOnSurfaceVariant">@color/muted</item>
+        <item name="colorOutline">@color/line</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+    </style>
+</resources>
