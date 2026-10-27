@@ -1,7 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">同晓</string>
-    <string name="hello_skeleton">同晓 · 工程骨架 OK</string>
+
+    <!-- Step 3.1 alarm list -->
+    <string name="alarm_list_empty">还没有闹钟\n点右下角 + 新建一个</string>
+    <string name="rule_once">一次</string>
+    <string name="rule_daily">每天</string>
+    <string name="rule_custom">自定义星期</string>
+    <string name="rule_custom_skip_holiday">自定义星期 · 跳过节假日</string>
+    <string name="rule_workday_smart">智能工作日 · 节假日跳过</string>
 
     <string name="alarm_default_label">闹钟</string>
     <string name="stop_ring">停止</string>

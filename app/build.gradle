@@ -36,6 +36,11 @@ dependencies {
     annotationProcessor 'androidx.room:room-compiler:2.8.5'
     implementation 'androidx.lifecycle:lifecycle-livedata:2.11.0'
 
+    // Step 3.1: list screen (ViewModel + RecyclerView; material pulls recyclerview
+    // transitively but the UI step depends on it directly).
+    implementation 'androidx.lifecycle:lifecycle-viewmodel:2.11.0'
+    implementation 'androidx.recyclerview:recyclerview:1.4.0'
+
     // Step 1.2 G2: in-memory DB tests on device/emulator.
     androidTestImplementation 'androidx.test.ext:junit:1.3.0'
     androidTestImplementation 'androidx.test:runner:1.7.0'
