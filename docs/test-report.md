@@ -66,7 +66,7 @@
 | 保存闹钟 | 新建 → 底部保存 | 回列表并出现条目，Toast 显示"下次响铃：…" |
 | 时间选择 | 点大时间 | 双滚轮（`TimePicker` + 2 个 `NumberPicker`），确定后回填 |
 | 边缘适配 | 进入各页 | 工具栏 top=136px（=状态栏高度），底部导航避开手势条 |
-| 响铃链路 | 编辑页"试响（10 秒后）" | 到点拉起停铃页（logcat: `Displayed ...StopRingActivity`） |
+| 响铃链路 | 设 1 分钟后的一次性闹钟 → 锁屏 | 到点拉起全屏停铃页（logcat: `Displayed ...StopRingActivity`）；该自测按钮已在验收前移除 |
 | Provider | `adb shell content query --uri content://com.course.tongxiao.alarms/alarms` | 游标可用；`content insert` → UnsupportedOperationException |
 
 ## 5. 评审抓出的真实缺陷（可作为答辩素材）

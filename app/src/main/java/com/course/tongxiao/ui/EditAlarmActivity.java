@@ -114,7 +114,6 @@ public class EditAlarmActivity extends AppCompatActivity {
         repeatGroup.setOnCheckedChangeListener((group, checkedId) -> updateVisibility());
 
         findViewById(R.id.edit_save).setOnClickListener(v -> save());
-        findViewById(R.id.edit_test_ring).setOnClickListener(v -> testRing());
 
         suggestionCard = findViewById(R.id.edit_suggestion_card);
         suggestionTitle = findViewById(R.id.edit_suggestion_title);
@@ -382,29 +381,8 @@ public class EditAlarmActivity extends AppCompatActivity {
     }
 
     /**
-     * Rings the alarm once, 10 seconds from now, without touching its regular
-     * schedule. This is the "why is nothing happening" self-test: it proves the
-     * whole receiver → service → screen chain works on this device.
+     * Formats "今天 07:30" / "明天 07:30" / "周三 07:30" for the save confirmation.
      */
-    private void testRing() {
-        final Alarm alarm = collectForm();
-        Toast.makeText(this, R.string.edit_test_scheduled, Toast.LENGTH_SHORT).show();
-        worker.execute(() -> {
-            try {
-                if (alarm.id <= 0) {
-                    alarm.id = (int) repository.insert(alarm);
-                } else {
-                    repository.update(alarm);
-                }
-                scheduler.scheduleAt(alarm, LocalDateTime.now().plusSeconds(10));
-            } catch (RuntimeException e) {
-                runOnUiThread(() -> Toast.makeText(this, R.string.edit_test_failed,
-                        Toast.LENGTH_LONG).show());
-            }
-        });
-    }
-
-    /** "今天 07:30" / "明天 07:30" / "周三 07:30". */
     private String formatNext(LocalDateTime next) {
         LocalDate today = LocalDate.now();
         String clock = String.format(Locale.CHINA, "%02d:%02d", next.getHour(), next.getMinute());

@@ -31,9 +31,6 @@
     <string name="edit_time_hint">点上面的时间，用滚轮选择</string>
     <string name="dialog_cancel">取消</string>
     <string name="dialog_ok">确定</string>
-    <string name="edit_test_ring">试响（10 秒后响铃）</string>
-    <string name="edit_test_scheduled">已安排 10 秒后试响，请稍等</string>
-    <string name="edit_test_failed">试响失败：无法安排闹钟，请检查精确闹钟权限</string>
     <string name="edit_saved_at">已保存，下次响铃：%1$s</string>
     <string name="edit_saved_no_time">已保存，但该闹钟没有可响的日期（请检查重复设置）</string>
     <string name="next_today">今天 %1$s</string>
