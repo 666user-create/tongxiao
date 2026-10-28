@@ -1,13 +1,13 @@
 # 同晓 · 测试报告
 
 > 生成方式：本文件由用户在模拟器 `Pixel_7_API_36` 上实跑的 `gradlew connectedDebugAndroidTest` 结果与各里程碑关卡记录汇总。
-> 状态：**已完成**（最终全量运行：334 tests / 0 failed / 0 skipped，模拟器 Pixel_7_API_36）
+> 状态：**已完成**（最终全量运行：340 tests / 0 failed / 0 skipped，模拟器 Pixel_7_API_36）
 
 ## 1. 结论速览
 
 | 项目 | 结果 |
 |---|---|
-| 单元/集成测试（instrumentation） | **334 tests / 0 failed / 0 errors / 0 skipped** |
+| 单元/集成测试（instrumentation） | **340 tests / 0 failed / 0 errors / 0 skipped** |
 | 构建（G1，含 lint） | `BUILD SUCCESSFUL`，lint **0 error**，仅余 2 条已知提示 |
 | 手动验证（G5） | 保存落库、滚轮时间选择、响铃全链路、Provider 只读、双机互助（见 §4） |
 
@@ -140,6 +140,31 @@ QA 之后 Lead 又补了两处：
 - **列表 DiffUtil 漏字段**：`areContentsTheSame` 未比较 `dayMask`/`advanceEnabled`/`advanceMaxMin`，而这些会影响"下次：…"显示 → 补上。
 
 环境限制跳过（非缺陷）：NSD 注册失败（模拟器无法构造）、ADD_SNOOZE 冷却（App 无该策略入口）、设备时钟跳变、滚轮只到分钟粒度（无法构造"10 秒后"）。
+
+## 5.4 专项界面测试（逐屏 + 四环境）
+
+由 UI QA 在模拟器上逐屏截图（82 张，`D:\Android\qa-ui\`）并在 **深色 / 1.3× 与 2.0× 字号 / 横屏 / 720×1280 小屏** 四种环境下复测，抓出 **12 个界面缺陷**并修复。
+
+| 编号 | 屏 | 现象 | 根因 | 修复 |
+|---|---|---|---|---|
+| **D1（P0）** | 全部 tab | **两个 Fragment 同时挂载**：列表出现两套卡片、文字互相压字；快速切 tab 也会串屏 | `MainActivity.swap()` 用异步 `commit()`，`onCreate` 里 `setSelectedItemId` 与显式 `showAlarms()` 各 add 一次（第一次事务还没执行，`findFragmentByTag` 返回 null） | 改 `commitNow()`，swap 变为同步幂等；补回归测试（`alarm_list` 实例数 2→1、连切 3 tab 不叠加） |
+| D2–D6 | 全局 | Material 默认紫残留：底部导航选中胶囊/滑块轨道淡紫、弹窗底色淡紫、关闭态开关拇指与轨道同色"像禁用"、输入框描边对比度仅 1.3:1 | 未覆盖 `secondaryContainer` / `surfaceContainer*` / `outline` 等角色 | 补绿系角色（`values` 与 `values-v27` 同步），描边改 `#6E7D6B`（≥3:1） |
+| D7 | 设置/统计/宿舍 | 标题比其它页右移 24dp，且**随内容滚动消失** | 三个布局把 `MaterialToolbar` 塞进带内边距的 ScrollView | 工具栏移出滚动区，固定 app bar（与闹钟页一致） |
+| D8 | 统计折线 | 2.0 字号下 Y 轴 "06:00" 被裁成 ":00"、X 轴日期被裁一半 | `SleepTrendView` 用固定 dp 留白而标签字号是 sp | 按 `measureText`/`fontMetrics` 动态算留白 |
+| D9 | 设置 | 2.0 字号下"选择地区（省 / 市 / 区县）"被硬截断 | 单行固定 56dp 按钮 | `autoSizeTextType` 10–14sp |
+| D10 | 宿舍 | "操作记录"标题下全空白（舍友/待确认都有空态） | `renderOpLog()` 空时直接 GONE，无替代视图 | 补 `group_op_log_empty` 空态 |
+| D11 | 停铃页 | "稍后提醒"是平台灰方块，像禁用且与主题割裂 | 用 `android.widget.Button` | 改 MaterialButton（停止 filled / 稍后 outline） |
+| D12 | 设置 | 未选地区时仍显示"清除"（点了没反应） | `renderRegion()` 未控制可见性 | 无地区时 GONE |
+
+Lead 随后按报告拍板的两项设计决策 + 三项打磨：
+
+- **锁竖屏**（四 Activity `screenOrientation="portrait"`）：横屏带横幅时列表不足一行；Android 16+ 大屏会忽略该请求，故列表在横屏额外隐藏副标题兜底。lint 两条相���规则在 `app/lint.xml` 里有理由地豁免。
+- **摇一摇入口**：编辑页改为**三选一按钮组**（关闭/选择题/摇一摇），SHAKE 此前 UI 不可达；补 2 条测试（持久化为 SHAKE、挑战页渲染摇动计数）。
+- 设置页 Snackbar → Toast（无 CoordinatorLayout 时 Snackbar 会盖住底部导航约 2 秒并吃点击）。
+- 题库半角问号 → 全角（2 处）。
+- 列表 DiffUtil 补 `dayMask`/`advanceEnabled`/`advanceMaxMin`（会影响"下次：…"显示）。
+
+记录但不修：2.0 字号下地区三滚轮相邻列文字重叠（NumberPicker 无 ellipsize/textSize API，需改选择流程）；横屏+2.0 挑战页只露 2 个选项（可滚动、紧急停止仍在屏内）；深色模式下保持浅色主题（v1 有意锁定）。
 ## 6. 已知未覆盖项
 
 - 真实跨设备 NSD 发现（模拟器只覆盖了 127.0.0.1 回环；真机需同热点）

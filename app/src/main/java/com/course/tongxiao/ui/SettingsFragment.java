@@ -20,7 +20,6 @@ import com.course.tongxiao.engine.region.RegionCatalog;
 import com.course.tongxiao.engine.weather.WeatherClient;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.materialswitch.MaterialSwitch;
-import com.google.android.material.snackbar.Snackbar;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -45,6 +44,7 @@ public class SettingsFragment extends Fragment {
     private TextView regionValue;
     private TextView regionHint;
     private MaterialButton regionPick;
+    private MaterialButton regionClear;
     private MaterialSwitch masterSwitch;
 
     /** Parsed once per screen; parsing ~200 KB of JSON is not free. */
@@ -76,6 +76,7 @@ public class SettingsFragment extends Fragment {
         regionValue = view.findViewById(R.id.settings_region_value);
         regionHint = view.findViewById(R.id.settings_region_hint);
         regionPick = view.findViewById(R.id.settings_region_pick);
+        regionClear = view.findViewById(R.id.settings_region_clear);
         masterSwitch = view.findViewById(R.id.settings_group_master);
 
         masterSwitch.setChecked(settings.isGroupMasterSwitchOn());
@@ -137,6 +138,20 @@ public class SettingsFragment extends Fragment {
         }
     }
 
+    /**
+     * Settings has no CoordinatorLayout, so a Snackbar docks over the bottom navigation
+     * and blocks it for ~2s. A Toast floats above it without stealing touches.
+     */
+    private void toast(int messageRes) {
+        android.widget.Toast.makeText(requireContext(), messageRes,
+                android.widget.Toast.LENGTH_SHORT).show();
+    }
+
+    private void toastText(String message) {
+        android.widget.Toast.makeText(requireContext(), message,
+                android.widget.Toast.LENGTH_SHORT).show();
+    }
+
     private void applyCatalogState() {
         boolean available = catalog != null && !catalog.isDegraded()
                 && !catalog.provinces().isEmpty();
@@ -149,8 +164,7 @@ public class SettingsFragment extends Fragment {
 
     private void openRegionPicker() {
         if (catalog == null || catalog.isDegraded() || catalog.provinces().isEmpty()) {
-            Snackbar.make(requireView(), R.string.settings_region_degraded,
-                    Snackbar.LENGTH_SHORT).show();
+            toast(R.string.settings_region_degraded);
             return;
         }
         // A value saved by an older build (free text "杭州", no 市 suffix) cannot be
@@ -162,15 +176,13 @@ public class SettingsFragment extends Fragment {
             String first = current.trim().split("\\s+")[0];
             if (!catalog.provinces().contains(first)) {
                 preselect = null;
-                Snackbar.make(requireView(), R.string.settings_region_reregister,
-                        Snackbar.LENGTH_LONG).show();
+                toast(R.string.settings_region_reregister);
             }
         }
         RegionPickerDialog.show(requireContext(), catalog, preselect, picked -> {
             settings.setCity(picked);
             renderRegion();
-            Snackbar.make(requireView(), getString(R.string.settings_region_saved, picked),
-                    Snackbar.LENGTH_SHORT).show();
+            toastText(getString(R.string.settings_region_saved, picked));
             refreshForecast(picked);
         });
     }
@@ -178,7 +190,7 @@ public class SettingsFragment extends Fragment {
     private void clearRegion() {
         settings.setCity("");
         renderRegion();
-        Snackbar.make(requireView(), R.string.settings_city_cleared, Snackbar.LENGTH_SHORT).show();
+        toast(R.string.settings_city_cleared);
     }
 
     private void renderRegion() {
@@ -187,6 +199,10 @@ public class SettingsFragment extends Fragment {
         regionValue.setText(hasRegion ? region : getString(R.string.settings_region_none));
         regionValue.setTextColor(requireContext().getColor(
                 hasRegion ? R.color.ink : R.color.muted));
+        // "清除" next to 未选择地区 was a no-op that looked like a broken control.
+        if (regionClear != null) {
+            regionClear.setVisibility(hasRegion ? View.VISIBLE : View.GONE);
+        }
         weatherStatus.setText(hasRegion
                 ? getString(R.string.settings_weather_on, region)
                 : getString(R.string.settings_weather_off));

@@ -10,6 +10,7 @@ import android.widget.TextView;
 import android.widget.TimePicker;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -73,7 +74,7 @@ public class EditAlarmActivity extends AppCompatActivity {
     /** Read-out for the slider: Material3 draws no value label of its own. */
     private TextView snoozeValue;
     private MaterialSwitch vibrateSwitch;
-    private MaterialSwitch challengeSwitch;
+    private MaterialButtonToggleGroup challengeModeGroup;
     private MaterialSwitch advanceWeatherSwitch;
     private MaterialSwitch shareToGroupSwitch;
 
@@ -128,7 +129,7 @@ public class EditAlarmActivity extends AppCompatActivity {
         snoozeSlider.addOnChangeListener((slider, value, fromUser) -> renderSnoozeValue());
         renderSnoozeValue();
         vibrateSwitch = findViewById(R.id.edit_vibrate);
-        challengeSwitch = findViewById(R.id.edit_challenge);
+        challengeModeGroup = findViewById(R.id.edit_challenge_mode);
         advanceWeatherSwitch = findViewById(R.id.edit_advance_weather);
         shareToGroupSwitch = findViewById(R.id.edit_share_group);
 
@@ -162,6 +163,7 @@ public class EditAlarmActivity extends AppCompatActivity {
         } else {
             repeatGroup.check(R.id.repeat_workday_smart);
             shareToGroupSwitch.setChecked(true);
+            challengeModeGroup.check(R.id.challenge_mode_off);
         }
         updateTimeLabel();
         updateVisibility();
@@ -263,9 +265,7 @@ public class EditAlarmActivity extends AppCompatActivity {
                 skipHolidaysSwitch.setChecked(loaded.skipHolidays);
                 advanceWeatherSwitch.setChecked(loaded.advanceEnabled);
                 shareToGroupSwitch.setChecked(loaded.sharedToGroup);
-                challengeSwitch.setChecked(!TextUtils.isEmpty(loaded.challengeOverrideJson)
-                        && ChallengeConfig.fromJson(loaded.challengeOverrideJson).mode
-                        != ChallengeConfig.Mode.DIRECT);
+                checkChallengeMode(ChallengeConfig.fromJson(loaded.challengeOverrideJson).mode);
                 applyRepeatToUi(loaded);
                 renderSuggestion(suggestion, sampleDays, weatherAdvanceText);
                 this.loaded = true;
@@ -379,8 +379,41 @@ public class EditAlarmActivity extends AppCompatActivity {
         return Alarm.RepeatMode.WORKDAY_SMART;
     }
 
-    /** Builds an Alarm from the current form, reusing the loaded row when editing. */
-    private Alarm collectForm() {
+    /** Reflects a stored challenge mode on the three-way selector. */
+    private void checkChallengeMode(@NonNull ChallengeConfig.Mode mode) {
+        int id;
+        switch (mode) {
+            case QUIZ:
+                id = R.id.challenge_mode_quiz;
+                break;
+            case SHAKE:
+                id = R.id.challenge_mode_shake;
+                break;
+            case DIRECT:
+            default:
+                id = R.id.challenge_mode_off;
+                break;
+        }
+        challengeModeGroup.check(id);
+    }
+
+    /**
+     * @return the JSON to persist for the selected challenge mode, or null when off
+     *         (null means "inherit the app default", i.e. no challenge for this alarm)
+     */
+    @Nullable
+    private String selectedChallengeJson() {
+        int checked = challengeModeGroup.getCheckedButtonId();
+        if (checked == R.id.challenge_mode_quiz) {
+            return ChallengeConfig.quizDefault().toJson();
+        }
+        if (checked == R.id.challenge_mode_shake) {
+            return ChallengeConfig.shakeDefault().toJson();
+        }
+        return null;
+    }
+
+    /** Builds an Alarm from the current form, reusing the loaded row when editing. */    private Alarm collectForm() {
         Alarm alarm = existing != null ? existing : new Alarm();
         alarm.hour = hour;
         alarm.minute = minute;
@@ -391,8 +424,7 @@ public class EditAlarmActivity extends AppCompatActivity {
         alarm.snoozeMin = (int) snoozeSlider.getValue();
         alarm.vibrate = vibrateSwitch.isChecked();
         // Challenge is opt-in (design decision): null = inherit the app default.
-        alarm.challengeOverrideJson = challengeSwitch.isChecked()
-                ? ChallengeConfig.quizDefault().toJson() : null;
+        alarm.challengeOverrideJson = selectedChallengeJson();
         // Weather advance is opt-in per alarm (design.md §5.3 / §7②). This switch is
         // the only writer of these two fields; without it the scheduler's advance
         // branch could never trigger in production.

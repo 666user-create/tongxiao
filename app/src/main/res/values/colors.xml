@@ -11,4 +11,19 @@
     <color name="ink">#171D16</color>
     <color name="muted">#5A6759</color>
     <color name="line">#DCE7DA</color>
+
+    <!-- Component-outline colour (text-field stroke, unchecked switch thumb, wheel
+         separators). It must contrast with the white card: `line` is a hairline tint
+         (1.3:1) and Material reuses colorOutline for the switch thumb, which made an
+         OFF switch look disabled/invisible. -->
+    <color name="outline">#6E7D6B</color>
+
+    <!-- M3 surface-container roles, tinted green. Left at the Material baseline they
+         are lavender (#E8DEF8 / #E6E1E5 / #F3EDF7), which leaked purple into the nav
+         indicator, slider track, dialogs and the OFF switch. -->
+    <color name="surface_container_low">#F3F9F1</color>
+    <color name="surface_container">#EEF6EC</color>
+    <color name="surface_container_high">#E9F1E7</color>
+    <color name="surface_container_highest">#E3EDE0</color>
+    <color name="surface_variant">#DCE7DA</color>
 </resources>

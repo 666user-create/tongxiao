@@ -89,8 +89,19 @@ public class AlarmListFragment extends Fragment {
             }
         }, "alarm-rearm").start();
 
+        // Portrait is requested in the manifest, but Android 16 ignores that on large
+        // screens. In landscape the fixed header (toolbar + subtitle + banner) plus the
+        // bottom nav left less than one row of list, so drop the subtitle there.
+        boolean landscape = getResources().getConfiguration().orientation
+                == android.content.res.Configuration.ORIENTATION_LANDSCAPE;
+        subtitle.setVisibility(landscape ? View.GONE : View.VISIBLE);
+
         viewModel.getAlarms().observe(getViewLifecycleOwner(), this::render);
-        viewModel.getTomorrowStatus().observe(getViewLifecycleOwner(), subtitle::setText);
+        viewModel.getTomorrowStatus().observe(getViewLifecycleOwner(), text -> {
+            if (!landscape) {
+                subtitle.setText(text);
+            }
+        });
 
         view.findViewById(R.id.add_alarm).setOnClickListener(v -> openEditor(null));
         setUpPermissionBanner(view);

@@ -1,15 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Lint baseline for this module. Two issues are intentionally ignored here, each
-  with a reason, so that a clean `gradlew build` means "nothing new":
+  Lint baseline for this module. Every entry here is a deliberate decision, so that a
+  clean `gradlew build` means "nothing new", not "we hid the problems":
 
   1. ObsoleteSdkInt on res/mipmap-anydpi-v26 — lint suggests folding the folder into
      `mipmap-anydpi` because minSdk is 26, but AAPT *requires* <adaptive-icon> to sit
      in a -v26 folder; merging it up makes the build fail with
      "resource mipmap/ic_launcher not found".
-  2. GradleDependency — the AGP/Gradle/Room/Material versions are pinned on purpose
-     (see docs/plan.md 工具链锁定): this project must build on the course machine's
-     offline mirror, so chasing "a newer version exists" would break reproducibility.
+  2. GradleDependency / version banners — AGP/Gradle/Room/Material versions are pinned
+     on purpose (docs/plan.md 工具链锁定): the project must build on the course
+     machine's offline mirror, so chasing "a newer version exists" breaks
+     reproducibility.
+  3. LockedOrientationActivity / DiscouragedApi on the four activities — the app is
+     portrait-only in v1 (docs/design.md §7.3). Landscape squeezed the alarm list to
+     less than one row once the permission banner was visible, and an alarm clock is a
+     one-handed, glanceable, portrait product. Android 16 ignores the request on large
+     screens, so AlarmListFragment additionally hides the "tomorrow" subtitle in
+     landscape as a defensive fallback.
 -->
 <lint>
     <issue id="ObsoleteSdkInt">
@@ -18,4 +25,6 @@
     <issue id="GradleDependency" severity="ignore" />
     <issue id="AndroidGradlePluginVersion" severity="ignore" />
     <issue id="NewerVersionAvailable" severity="ignore" />
+    <issue id="LockedOrientationActivity" severity="ignore" />
+    <issue id="DiscouragedApi" severity="ignore" />
 </lint>

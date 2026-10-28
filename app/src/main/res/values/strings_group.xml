@@ -29,6 +29,9 @@
     <string name="group_master_off_banner">互助总闸已关闭：不会执行任何远程指令</string>
     <string name="group_nsd_unavailable">局域网发现不可用（%1$s），可让舍友开热点后重试</string>
     <string name="group_op_log_title">操作记录</string>
+    <!-- Shown when the log is empty: before this the heading stood over blank space,
+         which read like a rendering failure (舍友/待我确认 do have empty states). -->
+    <string name="group_op_log_empty">还没有操作记录</string>
     <string name="group_members_title">舍友</string>
     <string name="group_member_empty">还没有舍友上线</string>
     <string name="group_pending_title">待我确认</string>

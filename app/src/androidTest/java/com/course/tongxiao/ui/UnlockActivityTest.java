@@ -218,4 +218,35 @@ public class UnlockActivityTest {
             db.alarmDao().deleteById(id);
         }
     }
+    /** SHAKE mode must render its progress line instead of the multiple-choice card. */
+    @Test
+    public void shakeChallenge_showsTheShakeCounter() throws Exception {
+        Alarm shake = new Alarm();
+        shake.label = "摇一摇";
+        shake.hour = 7;
+        shake.minute = 5;
+        shake.enabled = true;
+        shake.challengeOverrideJson =
+                com.course.tongxiao.engine.challenge.ChallengeConfig.shakeDefault().toJson();
+        int id = (int) db.alarmDao().insert(shake);
+        try {
+            Intent intent = new Intent(ctx, UnlockActivity.class)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    .putExtra(UnlockActivity.EXTRA_ALARM_ID, id);
+            try (ActivityScenario<UnlockActivity> scenario = ActivityScenario.launch(intent)) {
+                Thread.sleep(1200);
+                scenario.onActivity(activity -> {
+                    TextView shakeText = activity.findViewById(R.id.unlock_shake);
+                    assertNotNull(shakeText);
+                    assertEquals("shake UI is visible", View.VISIBLE, shakeText.getVisibility());
+                    assertTrue("shows the target count",
+                            shakeText.getText().toString().contains("5"));
+                    assertEquals("the quiz card is hidden", View.GONE,
+                            activity.findViewById(R.id.unlock_options).getVisibility());
+                });
+            }
+        } finally {
+            db.alarmDao().deleteById(id);
+        }
+    }
 }

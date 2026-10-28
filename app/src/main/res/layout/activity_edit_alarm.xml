@@ -312,12 +312,51 @@
                 android:checked="true"
                 android:text="@string/edit_vibrate" />
 
-            <com.google.android.material.materialswitch.MaterialSwitch
-                android:id="@+id/edit_challenge"
-                android:layout_width="match_parent"
+            <TextView
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:text="@string/edit_challenge" />
+                android:layout_marginTop="20dp"
+                android:text="@string/edit_challenge"
+                android:textColor="@color/ink"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+
+            <com.google.android.material.button.MaterialButtonToggleGroup
+                android:id="@+id/edit_challenge_mode"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                app:singleSelection="true"
+                app:selectionRequired="true">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/challenge_mode_off"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="44dp"
+                    android:insetLeft="2dp"
+                    android:insetRight="2dp"
+                    android:text="@string/edit_challenge_off" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/challenge_mode_quiz"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="44dp"
+                    android:insetLeft="2dp"
+                    android:insetRight="2dp"
+                    android:text="@string/edit_challenge_quiz" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/challenge_mode_shake"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="44dp"
+                    android:insetLeft="2dp"
+                    android:insetRight="2dp"
+                    android:text="@string/edit_challenge_shake" />
+
+            </com.google.android.material.button.MaterialButtonToggleGroup>
 
             <TextView
                 android:layout_width="match_parent"

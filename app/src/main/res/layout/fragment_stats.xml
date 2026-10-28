@@ -1,27 +1,35 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Step 6.3 statistics screen (design.md §7 ⑥): trend chart + snooze ranking +
      mute counter. Skeleton only — the tab entry point is wired by the Lead. -->
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:clipToPadding="false">
+    android:orientation="vertical">
+
+    <!-- Fixed app bar: same 16dp title inset as the alarm tab, and it stays put
+         while the statistics scroll. -->
+    <com.google.android.material.appbar.MaterialToolbar
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:background="@color/bg"
+        app:title="@string/stats_title"
+        app:titleTextColor="@color/green_primary" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:clipToPadding="false">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:paddingHorizontal="16dp"
-        android:paddingTop="8dp"
+        android:paddingTop="4dp"
         android:paddingBottom="32dp">
-
-        <com.google.android.material.appbar.MaterialToolbar
-            android:layout_width="match_parent"
-            android:layout_height="?attr/actionBarSize"
-            android:background="@color/bg"
-            app:title="@string/stats_title"
-            app:titleTextColor="@color/green_primary" />
 
         <!-- ① Wake-up trend, hand-drawn Canvas polyline -->
         <com.google.android.material.card.MaterialCardView
@@ -239,4 +247,6 @@
 
     </LinearLayout>
 
-</ScrollView>
+    </ScrollView>
+
+</LinearLayout>

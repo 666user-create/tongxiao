@@ -1,25 +1,33 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:clipToPadding="false">
+    android:orientation="vertical">
+
+    <!-- Fixed app bar: same 16dp title inset as the alarm tab, and it no longer
+         scrolls out of view with the settings content. -->
+    <com.google.android.material.appbar.MaterialToolbar
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:background="@color/bg"
+        app:title="@string/tab_settings"
+        app:titleTextColor="@color/green_primary" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:clipToPadding="false">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:paddingHorizontal="24dp"
-        android:paddingTop="8dp"
+        android:paddingTop="4dp"
         android:paddingBottom="32dp">
-
-        <com.google.android.material.appbar.MaterialToolbar
-            android:layout_width="match_parent"
-            android:layout_height="?attr/actionBarSize"
-            android:background="@color/bg"
-            app:title="@string/tab_settings"
-            app:titleTextColor="@color/green_primary" />
 
         <TextView
             android:id="@+id/settings_holiday_status"
@@ -55,6 +63,10 @@
             android:layout_width="match_parent"
             android:layout_height="56dp"
             android:layout_marginTop="12dp"
+            android:autoSizeTextType="uniform"
+            android:autoSizeMinTextSize="10sp"
+            android:autoSizeMaxTextSize="14sp"
+            android:autoSizeStepGranularity="1sp"
             app:icon="@android:drawable/ic_menu_mylocation"
             app:iconGravity="textStart"
             android:text="@string/settings_region_pick" />
@@ -86,7 +98,8 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
             android:text="@string/settings_city_clear"
-            android:textColor="@color/muted" />
+            android:textColor="@color/muted"
+            android:visibility="gone" />
 
         <TextView
             android:layout_width="wrap_content"
@@ -114,4 +127,6 @@
 
     </LinearLayout>
 
-</ScrollView>
+    </ScrollView>
+
+</LinearLayout>

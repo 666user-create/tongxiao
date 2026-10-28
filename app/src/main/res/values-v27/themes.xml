@@ -11,7 +11,18 @@
         <item name="colorSurface">@color/card</item>
         <item name="colorOnSurface">@color/ink</item>
         <item name="colorOnSurfaceVariant">@color/muted</item>
-        <item name="colorOutline">@color/line</item>
+        <!-- Keep in lock-step with values/themes.xml: the two style definitions are
+             whole-style overrides, so a role added in only one of them silently
+             disappears on API 27+. -->
+        <item name="colorOutline">@color/outline</item>
+        <item name="colorOutlineVariant">@color/line</item>
+        <item name="colorSecondaryContainer">@color/green_container</item>
+        <item name="colorOnSecondaryContainer">@color/green_primary</item>
+        <item name="colorSurfaceVariant">@color/surface_variant</item>
+        <item name="colorSurfaceContainerLow">@color/surface_container_low</item>
+        <item name="colorSurfaceContainer">@color/surface_container</item>
+        <item name="colorSurfaceContainerHigh">@color/surface_container_high</item>
+        <item name="colorSurfaceContainerHighest">@color/surface_container_highest</item>
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:windowLightNavigationBar">true</item>
     </style>

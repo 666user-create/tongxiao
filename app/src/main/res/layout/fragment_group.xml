@@ -2,26 +2,35 @@
 <!-- Step 5.5 dorm-group page skeleton (design.md §7 ④).
      Rows of the member and pending-request lists are added programmatically by
      GroupFragment, so this file only holds the static frame. -->
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:clipToPadding="false">
+    android:orientation="vertical">
+
+    <!-- The toolbar lives outside the ScrollView: identical position on all four
+         tabs (the alarm tab's title starts at the standard 16dp inset) and it must
+         not scroll away with the content. -->
+    <com.google.android.material.appbar.MaterialToolbar
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:background="@color/bg"
+        app:title="@string/tab_group"
+        app:titleTextColor="@color/green_primary" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:clipToPadding="false">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:paddingHorizontal="24dp"
-        android:paddingTop="8dp"
+        android:paddingTop="4dp"
         android:paddingBottom="32dp">
-
-        <com.google.android.material.appbar.MaterialToolbar
-            android:layout_width="match_parent"
-            android:layout_height="?attr/actionBarSize"
-            android:background="@color/bg"
-            app:title="@string/tab_group"
-            app:titleTextColor="@color/green_primary" />
 
         <TextView
             android:id="@+id/group_hint"
@@ -251,6 +260,15 @@
                 android:textSize="12sp"
                 android:visibility="gone" />
 
+            <TextView
+                android:id="@+id/group_op_log_empty"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="@string/group_op_log_empty"
+                android:textColor="@color/muted"
+                android:textSize="12sp" />
+
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/group_leave_button"
                 style="@style/Widget.Material3.Button.TextButton"
@@ -263,4 +281,6 @@
 
     </LinearLayout>
 
-</ScrollView>
+    </ScrollView>
+
+</LinearLayout>

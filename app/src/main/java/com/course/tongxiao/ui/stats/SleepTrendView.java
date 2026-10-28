@@ -99,10 +99,17 @@ public class SleepTrendView extends View {
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
 
-        float left = getPaddingLeft() + dp(34f);
+        // Reserve the axis gutters from the *painted* text, not from a dp constant:
+        // at font_scale 2.0 the hour labels are twice as wide as the old 34dp gutter
+        // (they were clipped to ":00") and the day labels twice as tall as the 18dp
+        // strip below the axis (they were cut in half).
+        Paint.FontMetrics labelMetrics = labelPaint.getFontMetrics();
+        float left = getPaddingLeft()
+                + Math.max(dp(34f), labelPaint.measureText("00:00") + dp(6f));
         float top = getPaddingTop() + dp(10f);
         float right = getWidth() - getPaddingRight() - dp(6f);
-        float bottom = getHeight() - getPaddingBottom() - dp(18f);
+        float bottom = getHeight() - getPaddingBottom()
+                - sp(12f) - labelMetrics.descent - dp(2f);
         if (right - left < dp(40f) || bottom - top < dp(40f)) {
             return; // measured too small to be readable
         }
@@ -201,8 +208,18 @@ public class SleepTrendView extends View {
     private void drawEmpty(Canvas canvas, float left, float top, float right, float bottom) {
         canvas.drawLine(left, top, left, bottom, axisPaint);
         canvas.drawLine(left, bottom, right, bottom, axisPaint);
-        canvas.drawText(getContext().getString(R.string.stats_trend_empty),
-                (left + right) / 2f, (top + bottom) / 2f, hintPaint);
+        // Shrink-to-fit instead of drawText(): at font_scale 2.0 the 13sp hint was
+        // wider than the plot area and got clipped on both sides.
+        String hint = getContext().getString(R.string.stats_trend_empty);
+        hintPaint.setTextSize(sp(13f));
+        float available = right - left - dp(16f);
+        if (available > 0f) {
+            float width = hintPaint.measureText(hint);
+            if (width > available) {
+                hintPaint.setTextSize(sp(13f) * available / width);
+            }
+        }
+        canvas.drawText(hint, (left + right) / 2f, (top + bottom) / 2f, hintPaint);
     }
 
     /** Index from the left edge of the window (0..13), or -1 when outside it. */

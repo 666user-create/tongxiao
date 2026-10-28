@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/ring_root"
     android:layout_width="match_parent"
@@ -26,21 +27,26 @@
         android:textColor="@color/muted"
         android:textSize="18sp" />
 
-    <Button
+    <!-- MaterialButton, not a plain Button: the platform button keeps the square
+         legacy background and the grey tonal fill, so on this screen 稍后提醒 looked
+         like a disabled control next to the filled green 停止. -->
+    <com.google.android.material.button.MaterialButton
         android:id="@+id/btn_stop"
         android:layout_width="match_parent"
         android:layout_height="64dp"
         android:layout_marginTop="56dp"
-        android:backgroundTint="@color/green_primary"
         android:text="@string/stop_ring"
         android:textColor="@color/green_on_primary"
-        android:textSize="20sp" />
+        android:textSize="20sp"
+        app:backgroundTint="@color/green_primary" />
 
-    <Button
+    <com.google.android.material.button.MaterialButton
         android:id="@+id/btn_snooze"
+        style="@style/Widget.Material3.Button.OutlinedButton"
         android:layout_width="match_parent"
         android:layout_height="56dp"
         android:layout_marginTop="16dp"
-        android:text="@string/snooze" />
+        android:text="@string/snooze"
+        android:textColor="@color/green_primary" />
 
 </LinearLayout>

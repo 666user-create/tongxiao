@@ -136,7 +136,12 @@ public class MainActivity extends AppCompatActivity {
         } else {
             tx.show(target);
         }
-        tx.commit();
+        // commitNow, not commit: commit() is asynchronous, so two swaps issued before
+        // the next frame (onCreate calls setSelectedItemId + showAlarms; a fast tab
+        // change does the same) both saw "no such fragment yet" and added it twice.
+        // The duplicates were never hidden — two alarm lists were drawn on top of
+        // each other, which is exactly the overlapping-rows bug seen on screen.
+        tx.commitNow();
     }
 
     private void ensureNotificationPermission() {

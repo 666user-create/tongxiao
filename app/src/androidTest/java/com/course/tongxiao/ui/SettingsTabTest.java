@@ -111,8 +111,27 @@ public class SettingsTabTest {
     }
 
     @Test
-    public void alarmsTabIsDefault() throws Exception {
+    public void clearRegionButton_isHiddenWhenNoRegionIsSelected() throws Exception {
+        Context ctx = ApplicationProvider.getApplicationContext();
+        SettingsStore store = new SettingsStore(ctx);
+        String originalCity = store.getCity();
+        store.setCity("");
+
         try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
+            openSettingsTab(scenario);
+            View clear = awaitView(scenario, R.id.settings_region_clear, View.class);
+            assertNotNull("clear action exists in the layout", clear);
+            // Regression: "清除" was always visible, so with no region selected the
+            // row read 未选择地区 followed by a no-op button.
+            assertEquals("nothing to clear yet: the button stays hidden",
+                    View.GONE, clear.getVisibility());
+        } finally {
+            store.setCity(originalCity);
+        }
+    }
+
+    @Test
+    public void alarmsTabIsDefault() throws Exception {        try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
             Thread.sleep(800);
             View list = awaitView(scenario, R.id.alarm_list, View.class);
             View empty = awaitView(scenario, R.id.empty_state, View.class);

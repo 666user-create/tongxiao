@@ -141,6 +141,7 @@ public class GroupFragment extends Fragment {
     private TextView nsdBanner;
     private TextView shareSummary;
     private TextView opLogView;
+    private TextView opLogEmpty;
     private EditText codeInput;
 
     @Nullable
@@ -173,6 +174,7 @@ public class GroupFragment extends Fragment {
         nsdBanner = view.findViewById(R.id.group_nsd_banner);
         shareSummary = view.findViewById(R.id.group_share_summary);
         opLogView = view.findViewById(R.id.group_op_log);
+        opLogEmpty = view.findViewById(R.id.group_op_log_empty);
         codeInput = view.findViewById(R.id.group_code_input);
 
         // Without an AlarmGateway the page still runs, but it must not pretend that
@@ -609,7 +611,11 @@ public class GroupFragment extends Fragment {
         if (opLogView == null) {
             return;
         }
-        if (opLog.isEmpty()) {
+        boolean empty = opLog.isEmpty();
+        if (opLogEmpty != null) {
+            opLogEmpty.setVisibility(empty ? View.VISIBLE : View.GONE);
+        }
+        if (empty) {
             opLogView.setVisibility(View.GONE);
             return;
         }

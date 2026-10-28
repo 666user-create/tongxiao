@@ -189,4 +189,36 @@ public class EditAlarmActivityTest {
             assertFalse("registration removed", hasRegistration(seed));
         }
     }
+    /**
+     * The edit screen must be able to produce a SHAKE challenge.
+     *
+     * <p>Before the three-way selector existed, only codes written by a peer or by
+     * hand could reach shake mode, so that whole feature was unreachable from the UI.
+     */
+    @Test
+    public void selectingShakeMode_persistsAShakeChallenge() throws Exception {
+        try (ActivityScenario<EditAlarmActivity> scenario =
+                     ActivityScenario.launch(EditAlarmActivity.class)) {
+            Thread.sleep(600);
+            scenario.onActivity(activity -> {
+                ((EditText) activity.findViewById(R.id.edit_label)).setText("摇一摇闹钟");
+                activity.findViewById(R.id.challenge_mode_shake).performClick();
+            });
+            saveViaButton(scenario);
+            Thread.sleep(1500);
+
+            Alarm stored = null;
+            for (Alarm alarm : db.alarmDao().getAll()) {
+                if ("摇一摇闹钟".equals(alarm.label)) {
+                    stored = alarm;
+                }
+            }
+            assertNotNull("alarm persisted", stored);
+            created.add(stored.id);
+            assertNotNull("a challenge override was written", stored.challengeOverrideJson);
+            assertEquals(com.course.tongxiao.engine.challenge.ChallengeConfig.Mode.SHAKE,
+                    com.course.tongxiao.engine.challenge.ChallengeConfig
+                            .fromJson(stored.challengeOverrideJson).mode);
+        }
+    }
 }

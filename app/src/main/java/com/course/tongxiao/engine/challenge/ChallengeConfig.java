@@ -64,6 +64,12 @@ public class ChallengeConfig {
         this.shakeCount = shakeCount;
     }
 
+    /** Config produced by the edit-screen 摇一摇 option (5 shakes). */
+    public static ChallengeConfig shakeDefault() {
+        return new ChallengeConfig(Mode.SHAKE, 2,
+                EnumSet.of(Question.Type.ARITHMETIC), WrongPolicy.RETRY, 0, 5);
+    }
+
     /**
      * Engine defaults: <b>challenge OFF</b> (mode DIRECT).
      *
@@ -78,7 +84,7 @@ public class ChallengeConfig {
                 WrongPolicy.RETRY, 5, 5);
     }
 
-    /** Config produced by the edit-screen "停铃挑战" switch (QUIZ, 2 questions). */
+    /** Config produced by the edit-screen 选择题 option (2 questions). */
     public static ChallengeConfig quizDefault() {
         return new ChallengeConfig(Mode.QUIZ, 2,
                 EnumSet.of(Question.Type.ARITHMETIC, Question.Type.GENERAL),

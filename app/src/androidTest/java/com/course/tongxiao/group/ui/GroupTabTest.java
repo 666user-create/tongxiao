@@ -137,6 +137,29 @@ public class GroupTabTest {
     }
 
     @Test
+    public void operationLogSection_isNeverABareHeading() throws Exception {
+        // Regression: when the log was empty the TextView was GONE and nothing took
+        // its place, so 操作记录 stood over blank space while 舍友/待我确认 both had
+        // an explicit empty state.
+        identity.setGroupCode("654321");
+        try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
+            openGroupTab(scenario);
+            Thread.sleep(600);
+
+            View log = awaitView(scenario, R.id.group_op_log, View.class);
+            View logEmpty = awaitView(scenario, R.id.group_op_log_empty, View.class);
+            assertNotNull("operation log view inflated", log);
+            assertNotNull("operation log empty state inflated", logEmpty);
+
+            boolean logVisible = log.getVisibility() == View.VISIBLE;
+            boolean emptyVisible = logEmpty.getVisibility() == View.VISIBLE;
+            assertTrue("exactly one of {log, empty state} must be visible, got log="
+                            + logVisible + " empty=" + emptyVisible,
+                    logVisible ^ emptyVisible);
+        }
+    }
+
+    @Test
     public void masterSwitchOff_showsTheBannerWhenTheTabIsShownAgain() throws Exception {
         // Regression: the banner was only recomputed in onCreateView/onResume, and the
         // tab host switches tabs with show/hide (no onResume), so turning 允许宿舍互助
