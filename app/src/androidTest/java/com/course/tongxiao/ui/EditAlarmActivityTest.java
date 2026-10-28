@@ -377,4 +377,30 @@ public class EditAlarmActivityTest {
         assertEquals("a real sound is stored as-is", custom.toString(),
                 EditAlarmActivity.normalizePickedRingtone(custom, defaultAlarm));
     }
+    /** Vibration strength is per alarm and must survive a save/load round trip. */
+    @Test
+    public void selectingStrongVibration_persistsTheStrength() throws Exception {
+        try (ActivityScenario<EditAlarmActivity> scenario =
+                     ActivityScenario.launch(EditAlarmActivity.class)) {
+            Thread.sleep(600);
+            scenario.onActivity(activity -> {
+                ((EditText) activity.findViewById(R.id.edit_label)).setText("强振动闹钟");
+                activity.findViewById(R.id.vibrate_strong).performClick();
+            });
+            saveViaButton(scenario);
+            Thread.sleep(1500);
+
+            Alarm stored = null;
+            for (Alarm alarm : db.alarmDao().getAll()) {
+                if ("强振动闹钟".equals(alarm.label)) {
+                    stored = alarm;
+                }
+            }
+            assertNotNull(stored);
+            created.add(stored.id);
+            assertEquals(com.course.tongxiao.alarm.VibrationProfiles.STRONG,
+                    stored.vibrateStrength);
+            assertTrue("vibration itself stays on", stored.vibrate);
+        }
+    }
 }

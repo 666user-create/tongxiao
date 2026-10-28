@@ -66,6 +66,10 @@ public class EditAlarmActivity extends AppCompatActivity {
     @Nullable
     private String ringtoneUri;
     private com.google.android.material.button.MaterialButton ringtoneButton;
+    private MaterialButtonToggleGroup vibrateStrengthGroup;
+    private TextView vibrateStrengthHint;
+    /** 0 light / 1 medium / 2 strong; clamped when persisted. */
+    private int vibrateStrength = com.course.tongxiao.alarm.VibrationProfiles.MEDIUM;
 
     private final androidx.activity.result.ActivityResultLauncher<android.content.Intent>
             ringtonePickerLauncher = registerForActivityResult(
@@ -156,6 +160,20 @@ public class EditAlarmActivity extends AppCompatActivity {
         snoozeSlider.addOnChangeListener((slider, value, fromUser) -> renderSnoozeValue());
         renderSnoozeValue();
         vibrateSwitch = findViewById(R.id.edit_vibrate);
+        vibrateStrengthGroup = findViewById(R.id.edit_vibrate_strength);
+        vibrateStrengthHint = findViewById(R.id.edit_vibrate_strength_hint);
+        vibrateStrengthGroup.check(R.id.vibrate_medium);
+        vibrateStrengthGroup.addOnButtonCheckedListener((group, checkedId, isChecked) -> {
+            if (!isChecked) {
+                return;
+            }
+            vibrateStrength = strengthOf(checkedId);
+            previewVibration(vibrateStrength);
+        });
+        // Strength only matters while vibration is on.
+        vibrateSwitch.setOnCheckedChangeListener((button, checked) ->
+                updateVibrateStrengthVisibility());
+        updateVibrateStrengthVisibility();
         ringtoneButton = findViewById(R.id.edit_ringtone);
         ringtoneButton.setOnClickListener(v -> openRingtonePicker());
         renderRingtone();
@@ -214,9 +232,61 @@ public class EditAlarmActivity extends AppCompatActivity {
         updateVisibility();
     }
 
+    private static int strengthOf(int buttonId) {
+        if (buttonId == R.id.vibrate_light) {
+            return com.course.tongxiao.alarm.VibrationProfiles.LIGHT;
+        }
+        if (buttonId == R.id.vibrate_strong) {
+            return com.course.tongxiao.alarm.VibrationProfiles.STRONG;
+        }
+        return com.course.tongxiao.alarm.VibrationProfiles.MEDIUM;
+    }
+
+    private static int buttonIdOf(int strength) {
+        switch (com.course.tongxiao.alarm.VibrationProfiles.clampStrength(strength)) {
+            case com.course.tongxiao.alarm.VibrationProfiles.LIGHT:
+                return R.id.vibrate_light;
+            case com.course.tongxiao.alarm.VibrationProfiles.STRONG:
+                return R.id.vibrate_strong;
+            case com.course.tongxiao.alarm.VibrationProfiles.MEDIUM:
+            default:
+                return R.id.vibrate_medium;
+        }
+    }
+
+    private void updateVibrateStrengthVisibility() {
+        boolean on = vibrateSwitch != null && vibrateSwitch.isChecked();
+        int visibility = on ? View.VISIBLE : View.GONE;
+        if (vibrateStrengthGroup != null) {
+            vibrateStrengthGroup.setVisibility(visibility);
+        }
+        if (vibrateStrengthHint != null) {
+            vibrateStrengthHint.setVisibility(visibility);
+        }
+    }
+
+    /** One short pulse so "light / medium / strong" is a felt choice, not a guess. */
+    private void previewVibration(int strength) {
+        try {
+            android.os.Vibrator vibrator = (android.os.Vibrator)
+                    getSystemService(android.content.Context.VIBRATOR_SERVICE);
+            if (vibrator == null || !vibrator.hasVibrator()) {
+                return;
+            }
+            long[] timings = com.course.tongxiao.alarm.VibrationProfiles.previewTimings();
+            android.os.VibrationEffect effect = vibrator.hasAmplitudeControl()
+                    ? android.os.VibrationEffect.createWaveform(timings,
+                    new int[]{0, com.course.tongxiao.alarm.VibrationProfiles
+                            .previewAmplitude(strength)}, -1)
+                    : android.os.VibrationEffect.createWaveform(timings, -1);
+            vibrator.vibrate(effect);
+        } catch (RuntimeException ignored) {
+            // preview is a nicety; never break the form for it
+        }
+    }
+
     /**
-     * Maps the picker result to what this alarm stores.
-     *
+     * Maps the picker result to what this alarm stores.     *
      * <p>The picker returns the default alarm URI when the user accepts "default" and
      * null when nothing is set; both mean "follow the device setting", stored as
      * {@code null} so a later change to the system alarm sound reaches this alarm too.
@@ -374,6 +444,10 @@ public class EditAlarmActivity extends AppCompatActivity {
                 snoozeSlider.setValue(Math.max(5, Math.min(30, loaded.snoozeMin)));
                 renderSnoozeValue();
                 vibrateSwitch.setChecked(loaded.vibrate);
+                vibrateStrength = com.course.tongxiao.alarm.VibrationProfiles
+                        .clampStrength(loaded.vibrateStrength);
+                vibrateStrengthGroup.check(buttonIdOf(vibrateStrength));
+                updateVibrateStrengthVisibility();
                 ringtoneUri = loaded.ringtoneUri;
                 renderRingtone();
                 skipHolidaysSwitch.setChecked(loaded.skipHolidays);
@@ -591,6 +665,8 @@ public class EditAlarmActivity extends AppCompatActivity {
         alarm.skipHolidays = skipHolidaysSwitch.isChecked();
         alarm.snoozeMin = (int) snoozeSlider.getValue();
         alarm.vibrate = vibrateSwitch.isChecked();
+        alarm.vibrateStrength = com.course.tongxiao.alarm.VibrationProfiles
+                .clampStrength(vibrateStrength);
         alarm.ringtoneUri = ringtoneUri;
         // Challenge is opt-in (design decision): null = inherit the app default.
         alarm.challengeOverrideJson = selectedChallengeJson();

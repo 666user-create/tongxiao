@@ -1,13 +1,13 @@
 # 同晓 · 测试报告
 
 > 生成方式：本文件由用户在模拟器 `Pixel_7_API_36` 上实跑的 `gradlew connectedDebugAndroidTest` 结果与各里程碑关卡记录汇总。
-> 状态：**已完成**（最终全量运行：369 tests / 0 failed / 0 skipped，模拟器 Pixel_7_API_36）
+> 状态：**已完成**（最终全量运行：374 tests / 0 failed / 0 skipped，模拟器 Pixel_7_API_36）
 
 ## 1. 结论速览
 
 | 项目 | 结果 |
 |---|---|
-| 单元/集成测试（instrumentation） | **369 tests / 0 failed / 0 errors / 0 skipped** |
+| 单元/集成测试（instrumentation） | **374 tests / 0 failed / 0 errors / 0 skipped** |
 | 构建（G1，含 lint） | `BUILD SUCCESSFUL`，lint **0 error**，仅余 2 条已知提示 |
 | 手动验证（G5） | 保存落库、滚轮时间选择、响铃全链路、Provider 只读、双机互助（见 §4） |
 
@@ -173,7 +173,7 @@ Lead 随后按报告拍板的两项设计决策 + 三项打磨：
 | 项 | 结果 |
 |---|---|
 | `gradlew build`（含 release 变体与 lint） | BUILD SUCCESSFUL；lint **0 error / 0 warning** |
-| `connectedDebugAndroidTest`（先 `pm clear`） | **369 tests / 0 failed / 0 errors / 0 skipped** |
+| `connectedDebugAndroidTest`（先 `pm clear`） | **374 tests / 0 failed / 0 errors / 0 skipped** |
 | 冷启动 / 四 tab | 正常（闹钟 / 互助 / 统计 / 设置），无重复 Fragment |
 | 新建闹钟 → 保存 → 系统注册 | `dumpsys alarm` 显示 `RTC_WAKEUP` + `exactAllowReason=policy_permission` + `showIntent=startActivity`（全屏页链路已排程） |
 | 关闭闹钟 | "下次"行消失，`dumpsys alarm` 活动注册 **2 → 0** |
@@ -252,6 +252,19 @@ Lead 随后按报告拍板的两项设计决策 + 三项打磨：
 设备实测：编辑页点「铃声」→ 打开系统 Sound Picker（`Currently set / My Sounds / Pixel Sounds / Gems`，含 SAVE）→ 返回编辑页不崩溃、按钮仍显示"默认闹钟铃声"（未选择时不变更）。
 
 > 环境备注：期间模拟器进程句柄残留（进程名是 `qemu-system-x86_64-headless`）导致 AVD 被占、全量测试卡在 16/369；清理锁文件并重启后 **369/369** 全绿。
+
+## 5.10 振动强度（轻/中/强）
+
+| 项 | 实现 |
+|---|---|
+| 数据 | `alarms.vibrateStrength`（0 轻 / 1 中 / 2 强，默认中）；**DB 版本 1 → 2，带正规迁移** `MIGRATION_1_2`（`ALTER TABLE alarms ADD COLUMN vibrateStrength INTEGER NOT NULL DEFAULT 1`），不清库 |
+| 表达方式 | Android 无"强度"API，故用**振幅 + 节奏**：轻 `[0,200,800]`@60 / 中 `[0,350,400]`@140 / 强 `[0,500,150]`@255；设备无振幅控制时只靠节奏区分。映射集中在 `VibrationProfiles`（纯逻辑、可测） |
+| UI | 编辑页「响铃时振动」下方三选一，**点一下立刻试振**（同一振幅）；关闭振动时自动隐藏 |
+| 兼容 | 未知值一律回落"中" |
+
+**真实升级验证**（本轮重点）：用旧提交 `ff3644e` 单独构建 v1 APK（DB version 1）→ 安装并建一个 07:30 智能工作日闹钟 → 覆盖安装当前版本（DB version 2）→ 结果：**闹钟仍在、无崩溃、编辑页振动强度显示"中"**（即从迁移后的库读到了新列），点"强"可正常选中。证明迁移未丢数据。
+
+> 说明：原本写了基于 `androidx.room:room-testing` 的迁移单测，但该依赖内部的 kotlinx.serialization 版本与 Room 2.8.5 冲突（`AbstractMethodError`），故改为上述"真机双版本升级"验证，并把该依赖移除，避免给项目引入不可控的传递依赖。
 ## 6. 已知未覆盖项
 
 - 真实跨设备 NSD 发现（模拟器只覆盖了 127.0.0.1 回环；真机需同热点）

@@ -46,6 +46,13 @@ public class Alarm {
 
     public String ringtoneUri;
     public boolean vibrate = true;
+
+    /**
+     * Vibration strength: 0 = light, 1 = medium, 2 = strong (design.md §5.5).
+     * Android has no "intensity" API, so it is expressed as amplitude + rhythm by
+     * {@code VibrationProfiles}; an unknown value falls back to medium.
+     */
+    public int vibrateStrength = 1;
     public int snoozeMin = 10;
 
     /** null = inherit global default challenge config (design.md §3). */

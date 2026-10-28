@@ -43,7 +43,7 @@ import java.util.concurrent.Executors;
  * full-screen intent the system shows on top of the keyguard.
  *
  * <p>Every exit path releases player/vibrator/wakelock and removes the
- * notification 閳?a leftover notification would keep the service "running".
+ * notification — a leftover notification would keep the service "running".
  * The notification always offers a Stop action so the ring can be silenced even
  * if the stop screen is unreachable.
  */
@@ -254,7 +254,7 @@ public class RingService extends Service {
         main.removeCallbacks(ringTimeout);
         main.postDelayed(ringTimeout, MAX_RING_DURATION_MS);
         if (alarm == null || alarm.vibrate) {
-            startVibrator();
+            startVibrator(alarm == null ? VibrationProfiles.MEDIUM : alarm.vibrateStrength);
         }
         launchStopScreen(label);
     }
@@ -320,13 +320,28 @@ public class RingService extends Service {
         }
     }
 
-    private void startVibrator() {
+    private void startVibrator(int strength) {
         vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
         if (vibrator == null || !vibrator.hasVibrator()) {
             return;
         }
-        long[] pattern = {0, 800, 600, 800, 600};
-        vibrator.vibrate(VibrationEffect.createWaveform(pattern, 0));
+        long[] timings = VibrationProfiles.timings(strength);
+        int[] amplitudes = VibrationProfiles.amplitudes(strength);
+        try {
+            VibrationEffect effect = vibrator.hasAmplitudeControl()
+                    ? VibrationEffect.createWaveform(timings, amplitudes, 0)
+                    // Without amplitude control the platform still honours the rhythm,
+                    // so light/medium/strong stay distinguishable.
+                    : VibrationEffect.createWaveform(timings, 0);
+            vibrator.vibrate(effect);
+        } catch (RuntimeException e) {
+            Log.w(TAG, "vibration effect rejected: " + e.getClass().getSimpleName());
+            try {
+                vibrator.vibrate(VibrationEffect.createWaveform(timings, 0));
+            } catch (RuntimeException ignored) {
+                // no vibration is better than a crash while the alarm rings
+            }
+        }
     }
 
     private Notification buildNotification(int alarmIdValue, String label, long startedAt) {

@@ -26,7 +26,7 @@
 | 调休/节假日引擎 | `engine/HolidayCalendar`、`engine/HolidayResolver` | assets 内置 2026 国务院公告（33 假日 / 6 补班日），缺失年份自动降级为普通星期 |
 | 下次触发计算 | `engine/NextTriggerCalculator` | 补班优先 > 法定假 > 星期；严格"晚于当前"；DST 重叠取后 offset |
 | 闹钟调度 | `alarm/AlarmScheduler` | `setAlarmClock`（闹钟级最高优先级）+ requestCode=id 幂等 + 不精确兜底 |
-| 响铃链路 | `alarm/AlarmReceiver` → `alarm/RingService` → `alarm/StopRingActivity` | 前台服务播铃+振动+WakeLock；锁屏全屏页；通知常驻"停止"；**每闹钟可选铃声（系统选择器，可试听）** |
+| 响铃链路 | `alarm/AlarmReceiver` → `alarm/RingService` → `alarm/StopRingActivity` | 前台服务播铃+振动+WakeLock；锁屏全屏页；通知常驻"停止"；**每闹钟可选铃声（系统选择器，可试听）与振动强度（轻/中/强）** |
 | 响后状态机 | `alarm/RingActions` | 停铃重排下一次、ONCE 自关闭、贪睡钳制 1–30 分、跳过重排 |
 | 系统事件恢复 | `alarm/SystemEventReceiver` | 开机 / 改时间 / 时区 / 应用更新 → 全量重排 |
 | 停铃挑战 | `engine/challenge/*`、`ui/UnlockActivity` | 离线算术题 + 30 题题库 + **自定义题目（自己出题，最多 50 道；每个闹钟可选"内置题库 / 我的题目"）**；配置接收端硬钳制 |

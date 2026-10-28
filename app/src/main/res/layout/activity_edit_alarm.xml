@@ -311,6 +311,46 @@
                 android:layout_marginTop="12dp"
                 android:checked="true"
                 android:text="@string/edit_vibrate" />
+            <com.google.android.material.button.MaterialButtonToggleGroup
+                android:id="@+id/edit_vibrate_strength"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_marginTop="4dp"
+                app:selectionRequired="true"
+                app:singleSelection="true">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/vibrate_light"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="40dp"
+                    android:text="@string/edit_vibrate_light" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/vibrate_medium"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="40dp"
+                    android:text="@string/edit_vibrate_medium" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/vibrate_strong"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="40dp"
+                    android:text="@string/edit_vibrate_strong" />
+
+            </com.google.android.material.button.MaterialButtonToggleGroup>
+
+            <TextView
+                android:id="@+id/edit_vibrate_strength_hint"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text="@string/edit_vibrate_strength_hint"
+                android:textColor="@color/muted"
+                android:textSize="12sp" />
 
             <TextView
                 android:layout_width="wrap_content"
