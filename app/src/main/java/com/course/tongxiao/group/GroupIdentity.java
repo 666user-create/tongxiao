@@ -70,7 +70,7 @@ public final class GroupIdentity {
             return stored;
         }
         String id = deviceId();
-        return "舍友" + id.substring(0, Math.min(4, id.length()));
+        return "组员" + id.substring(0, Math.min(4, id.length()));
     }
 
     public void setNick(@Nullable String nick) {

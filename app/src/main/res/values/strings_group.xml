@@ -3,18 +3,18 @@
      touch the shared strings.xml (and cannot collide with other people's edits). -->
 <resources>
 
-    <string name="tab_group">宿舍</string>
-    <string name="group_scope_hint">应用运行期间舍友可发现你并远程静音；代设请求需要你确认</string>
+    <string name="tab_group">互助</string>
+    <string name="group_scope_hint">应用运行期间组员可发现你并远程静音；代设请求需要你确认</string>
 
     <!-- Not in a group yet -->
-    <string name="group_join_title">宿舍互助</string>
-    <string name="group_join_helper">同一 Wi-Fi 下的舍友互相可见。创建后把 6 位组码告诉舍友，或输入舍友给你的组码。</string>
-    <string name="group_create">创建宿舍组</string>
+    <string name="group_join_title">互助组</string>
+    <string name="group_join_helper">同一 Wi-Fi 下的组员互相可见。创建后把 6 位组码告诉组员，或输入组员给你的组码。</string>
+    <string name="group_create">创建互助组</string>
     <string name="group_code_hint">6 位组码</string>
     <string name="group_join">加入</string>
     <string name="group_code_invalid">组码必须是 6 位数字</string>
-    <string name="group_created">已创建宿舍组：%1$s，念给舍友即可</string>
-    <string name="group_joined">已加入组码 %1$s，等待舍友上线</string>
+    <string name="group_created">已创建互助组：%1$s，念给组员即可</string>
+    <string name="group_joined">已加入组码 %1$s，等待组员上线</string>
 
     <!-- In a group -->
     <string name="group_code_label">组码 %1$s</string>
@@ -22,33 +22,33 @@
     <string name="group_code_copy">复制组码</string>
     <string name="group_code_copied">组码已复制</string>
     <string name="group_nick_edit">改昵称</string>
-    <string name="group_nick_edit_title">改一个舍友认识的名字</string>
+    <string name="group_nick_edit_title">改一个组员认识的名字</string>
     <string name="group_nick_hint">昵称</string>
     <string name="group_nick_saved">昵称已更新</string>
     <string name="group_share_summary">共享中：我的 %1$d 个闹钟（可在编辑页逐个关闭）</string>
     <string name="group_master_off_banner">互助总闸已关闭：不会执行任何远程指令</string>
-    <string name="group_nsd_unavailable">局域网发现不可用（%1$s），可让舍友开热点后重试</string>
+    <string name="group_nsd_unavailable">局域网发现不可用（%1$s），可让组员开热点后重试</string>
     <string name="group_op_log_title">操作记录</string>
     <!-- Shown when the log is empty: before this the heading stood over blank space,
-         which read like a rendering failure (舍友/待我确认 do have empty states). -->
+         which read like a rendering failure (members/pending do have empty states). -->
     <string name="group_op_log_empty">还没有操作记录</string>
-    <string name="group_members_title">舍友</string>
-    <string name="group_member_empty">还没有舍友上线</string>
+    <string name="group_members_title">组员</string>
+    <string name="group_member_empty">还没有组员上线</string>
     <string name="group_pending_title">待我确认</string>
     <string name="group_pending_empty">没有待确认的请求</string>
     <string name="group_accept">同意</string>
     <string name="group_reject">拒绝</string>
-    <string name="group_leave">退出宿舍组</string>
-    <string name="group_left">已退出宿舍组</string>
+    <string name="group_leave">退出互助组</string>
+    <string name="group_left">已退出互助组</string>
     <string name="group_member_online_dot">●</string>
 
     <!-- Remote mute (design.md §3.2: the only no-confirmation operation) -->
     <string name="group_member_ringing">正在响</string>
     <string name="group_mute">静音</string>
-    <string name="group_mute_ok">已静音舍友的闹钟</string>
-    <string name="group_mute_no_link">与舍友的连接已断开，稍后重试</string>
+    <string name="group_mute_ok">已静音组员的闹钟</string>
+    <string name="group_mute_no_link">与组员的连接已断开，稍后重试</string>
     <string name="group_mute_denied">对方没有授予你静音权限</string>
-    <string name="group_mute_blocked">对方关闭了宿舍互助总闸</string>
+    <string name="group_mute_blocked">对方关闭了互助组总闸</string>
     <string name="group_mute_not_found">对方的这个闹钟已不存在</string>
     <string name="group_mute_not_ringing">那个闹钟已经停了</string>
     <string name="group_mute_stale">连接太久没有心跳，已失效</string>
@@ -78,11 +78,11 @@
     <string name="group_request_label_hint">闹钟名（如 早八）</string>
     <string name="group_request_invalid_time">时间格式不对，请用 HH:mm</string>
     <string name="group_request_sent">已发出代设申请，等待对方确认</string>
-    <string name="group_request_no_link">与舍友的连接已断开，稍后重试</string>
+    <string name="group_request_no_link">与组员的连接已断开，稍后重试</string>
 
     <!-- Operation log (op receipts from peers + local decisions) -->
-    <string name="group_op_mute_received">舍友静音了你的闹钟</string>
-    <string name="group_op_set_queued">已向舍友发出代设申请</string>
+    <string name="group_op_mute_received">组员静音了你的闹钟</string>
+    <string name="group_op_set_queued">已向组员发出代设申请</string>
     <string name="group_op_set_denied">代设申请被拒：%1$s</string>
     <string name="group_op_set_response_accept">对方同意了你之前的代设申请</string>
     <string name="group_op_set_response_reject">对方拒绝了你之前的代设申请</string>

@@ -31,8 +31,8 @@
     <string name="edit_challenge_shake">摇一摇</string>
     <string name="edit_advance_weather">天气不佳时提前响</string>
     <string name="edit_advance_weather_helper">需先在设置里选择地区；雨雪或 0℃ 以下时最多提前 20 分钟</string>
-    <string name="edit_share_group">共享给宿舍组</string>
-    <string name="edit_share_group_helper">共享后舍友能看到这个闹钟，并在它响时帮你静音</string>
+    <string name="edit_share_group">共享到互助组</string>
+    <string name="edit_share_group_helper">共享后组员能看到这个闹钟，并在它响时帮你静音</string>
     <string name="edit_delete_confirm_title">删除这个闹钟？</string>
     <string name="edit_delete_confirm_text">「%1$s」将被永久删除，历史和统计记录也会一起清掉，无法恢复。</string>
     <string name="edit_loading_wait">正在读取闹钟设置，请稍等一下再保存</string>
@@ -94,9 +94,9 @@
     <string name="settings_city_cleared">已清除城市，天气联动已关闭</string>
     <string name="settings_weather_on">当前城市：%1$s\n恶劣天气时闹钟会提前响（不用担心睡过头）</string>
     <string name="settings_weather_off">未设置城市 · 天气联动未开启\n设置城市后，雨雪天气会自动提前叫醒你</string>
-    <string name="settings_group_title">宿舍互助</string>
-    <string name="settings_group_master">允许宿舍互助</string>
-    <string name="settings_group_master_helper">关闭后不再接受任何舍友的静音/代设指令（不会清除已授权项）</string>
+    <string name="settings_group_title">互助组</string>
+    <string name="settings_group_master">允许互助组</string>
+    <string name="settings_group_master_helper">关闭后不再接受任何组员的静音/代设指令（不会清除已授权项）</string>
 
     <!-- Step 4.2/4.3 challenge -->
     <string name="unlock_progress">第 %1$d / %2$d 题 · 答对才能停铃</string>
