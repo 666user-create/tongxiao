@@ -62,6 +62,26 @@ public class EditAlarmActivity extends AppCompatActivity {
     private int alarmId;
     private Alarm existing;
 
+    /** Chosen alarm sound; null = follow the system default alarm ringtone. */
+    @Nullable
+    private String ringtoneUri;
+    private com.google.android.material.button.MaterialButton ringtoneButton;
+
+    private final androidx.activity.result.ActivityResultLauncher<android.content.Intent>
+            ringtonePickerLauncher = registerForActivityResult(
+            new androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(),
+            result -> {
+                if (result.getResultCode() != RESULT_OK || result.getData() == null) {
+                    return;
+                }
+                android.net.Uri picked = result.getData().getParcelableExtra(
+                        android.media.RingtoneManager.EXTRA_RINGTONE_PICKED_URI);
+                ringtoneUri = normalizePickedRingtone(picked,
+                        android.media.RingtoneManager.getDefaultUri(
+                                android.media.RingtoneManager.TYPE_ALARM));
+                renderRingtone();
+            });
+
     private int hour = 7;
     private int minute = 30;
 
@@ -136,6 +156,9 @@ public class EditAlarmActivity extends AppCompatActivity {
         snoozeSlider.addOnChangeListener((slider, value, fromUser) -> renderSnoozeValue());
         renderSnoozeValue();
         vibrateSwitch = findViewById(R.id.edit_vibrate);
+        ringtoneButton = findViewById(R.id.edit_ringtone);
+        ringtoneButton.setOnClickListener(v -> openRingtonePicker());
+        renderRingtone();
         challengeModeGroup = findViewById(R.id.edit_challenge_mode);
         questionSourceLabel = findViewById(R.id.edit_question_source_label);
         questionSourceGroup = findViewById(R.id.edit_question_source);
@@ -191,8 +214,75 @@ public class EditAlarmActivity extends AppCompatActivity {
         updateVisibility();
     }
 
-    private void openTimePicker() {
-        // Roller (spinner) picker: two wheels, hour then minute — the familiar
+    /**
+     * Maps the picker result to what this alarm stores.
+     *
+     * <p>The picker returns the default alarm URI when the user accepts "default" and
+     * null when nothing is set; both mean "follow the device setting", stored as
+     * {@code null} so a later change to the system alarm sound reaches this alarm too.
+     *
+     * @return the URI to persist, or null for "system default"
+     */
+    @Nullable
+    static String normalizePickedRingtone(@Nullable android.net.Uri picked,
+                                          @Nullable android.net.Uri defaultAlarmUri) {
+        if (picked == null) {
+            return null;
+        }
+        if (defaultAlarmUri != null && defaultAlarmUri.equals(picked)) {
+            return null;
+        }
+        return picked.toString();
+    }
+
+    /**
+     * System ringtone picker (alarm sounds only, with its built-in preview). Choosing
+     * "default" stores null so the alarm keeps following the device setting.
+     */
+    private void openRingtonePicker() {
+        android.content.Intent intent = new android.content.Intent(
+                android.media.RingtoneManager.ACTION_RINGTONE_PICKER)
+                .putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_TYPE,
+                        android.media.RingtoneManager.TYPE_ALARM)
+                .putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
+                .putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false)
+                .putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_TITLE,
+                        getString(R.string.edit_ringtone_pick));
+        if (ringtoneUri != null) {
+            intent.putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_EXISTING_URI,
+                    android.net.Uri.parse(ringtoneUri));
+        }
+        try {
+            ringtonePickerLauncher.launch(intent);
+        } catch (RuntimeException noPicker) {
+            Toast.makeText(this, R.string.edit_ringtone_unavailable, Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    /** Shows the chosen sound name, or the default label when following the system. */
+    private void renderRingtone() {
+        if (ringtoneButton == null) {
+            return;
+        }
+        ringtoneButton.setText(ringtoneUri == null
+                ? getString(R.string.edit_ringtone_default) : ringtoneTitle(ringtoneUri));
+    }
+
+    @NonNull
+    private String ringtoneTitle(@NonNull String uri) {
+        try {
+            android.media.Ringtone ringtone = android.media.RingtoneManager
+                    .getRingtone(this, android.net.Uri.parse(uri));
+            if (ringtone != null && !TextUtils.isEmpty(ringtone.getTitle(this))) {
+                return ringtone.getTitle(this);
+            }
+        } catch (RuntimeException unreadable) {
+            // The chosen sound was deleted meanwhile: keep the row usable.
+        }
+        return getString(R.string.edit_ringtone_unavailable);
+    }
+
+    private void openTimePicker() {        // Roller (spinner) picker: two wheels, hour then minute — the familiar
         // scrolling interaction instead of typing digits.
         View content = getLayoutInflater().inflate(R.layout.dialog_time_picker, null);
         TimePicker picker = content.findViewById(R.id.time_picker);
@@ -284,6 +374,8 @@ public class EditAlarmActivity extends AppCompatActivity {
                 snoozeSlider.setValue(Math.max(5, Math.min(30, loaded.snoozeMin)));
                 renderSnoozeValue();
                 vibrateSwitch.setChecked(loaded.vibrate);
+                ringtoneUri = loaded.ringtoneUri;
+                renderRingtone();
                 skipHolidaysSwitch.setChecked(loaded.skipHolidays);
                 advanceWeatherSwitch.setChecked(loaded.advanceEnabled);
                 shareToGroupSwitch.setChecked(loaded.sharedToGroup);
@@ -499,6 +591,7 @@ public class EditAlarmActivity extends AppCompatActivity {
         alarm.skipHolidays = skipHolidaysSwitch.isChecked();
         alarm.snoozeMin = (int) snoozeSlider.getValue();
         alarm.vibrate = vibrateSwitch.isChecked();
+        alarm.ringtoneUri = ringtoneUri;
         // Challenge is opt-in (design decision): null = inherit the app default.
         alarm.challengeOverrideJson = selectedChallengeJson();
         // Weather advance is opt-in per alarm (design.md §5.3 / §7②). This switch is

@@ -1,13 +1,13 @@
 # 同晓 · 测试报告
 
 > 生成方式：本文件由用户在模拟器 `Pixel_7_API_36` 上实跑的 `gradlew connectedDebugAndroidTest` 结果与各里程碑关卡记录汇总。
-> 状态：**已完成**（最终全量运行：366 tests / 0 failed / 0 skipped，模拟器 Pixel_7_API_36）
+> 状态：**已完成**（最终全量运行：369 tests / 0 failed / 0 skipped，模拟器 Pixel_7_API_36）
 
 ## 1. 结论速览
 
 | 项目 | 结果 |
 |---|---|
-| 单元/集成测试（instrumentation） | **366 tests / 0 failed / 0 errors / 0 skipped** |
+| 单元/集成测试（instrumentation） | **369 tests / 0 failed / 0 errors / 0 skipped** |
 | 构建（G1，含 lint） | `BUILD SUCCESSFUL`，lint **0 error**，仅余 2 条已知提示 |
 | 手动验证（G5） | 保存落库、滚轮时间选择、响铃全链路、Provider 只读、双机互助（见 §4） |
 
@@ -173,7 +173,7 @@ Lead 随后按报告拍板的两项设计决策 + 三项打磨：
 | 项 | 结果 |
 |---|---|
 | `gradlew build`（含 release 变体与 lint） | BUILD SUCCESSFUL；lint **0 error / 0 warning** |
-| `connectedDebugAndroidTest`（先 `pm clear`） | **366 tests / 0 failed / 0 errors / 0 skipped** |
+| `connectedDebugAndroidTest`（先 `pm clear`） | **369 tests / 0 failed / 0 errors / 0 skipped** |
 | 冷启动 / 四 tab | 正常（闹钟 / 互助 / 统计 / 设置），无重复 Fragment |
 | 新建闹钟 → 保存 → 系统注册 | `dumpsys alarm` 显示 `RTC_WAKEUP` + `exactAllowReason=policy_permission` + `showIntent=startActivity`（全屏页链路已排程） |
 | 关闭闹钟 | "下次"行消失，`dumpsys alarm` 活动注册 **2 → 0** |
@@ -235,6 +235,23 @@ Lead 随后按报告拍板的两项设计决策 + 三项打磨：
 - 四个 tab、编辑页三组选择器（模式/题目来源/答错惩罚）、地区三滚轮、Provider 只读与注入拒绝、权限横幅、删除流程、闹钟注册与取消——均正常，`logcat -b crash` 全程为空
 
 > 一条给后来者的经验：`adb shell pm clear` 会连运行时权限一起清掉，之后要重新 `pm grant POST_NOTIFICATIONS`，否则会出现"权限横幅挡住点击导致脚本点偏"的假故障。
+
+## 5.9 铃声可选（补齐漏做能力）
+
+用户反馈"真实响铃可以，但没办法修改铃声"——确认 `Alarm.ringtoneUri` 与 `RingService` 早就支持自定义铃声，**但编辑页从未给入口**，所以永远是系统默认。本轮补齐：
+
+| 项 | 实现 |
+|---|---|
+| 入口 | 编辑页「铃声」行（在振动开关下方，显示当前铃声名，默认显示"默认闹钟铃声"） |
+| 选择器 | 系统 `ACTION_RINGTONE_PICKER`（`TYPE_ALARM`，自带试听、显示默认项、不提供静音以免出现"只震动"的误解） |
+| 存储 | `alarm.ringtoneUri`；选"默认"或未选 → 存 `null`（跟随系统闹钟音，系统换音也会跟着变） |
+| 播放 | `RingService`：自定义 URI → 系统闹钟音 → 通知音兜底（找不到文件也会响） |
+| 健壮性 | 铃声已被删除时按钮降级为"无法读取这首歌的名字"，不崩 |
+| 测试 | 新增 3 条：新建闹钟保持默认（`ringtoneUri=null`）、编辑已有保留自定义 URI、选择结果归一到 `null` 的映射规则 |
+
+设备实测：编辑页点「铃声」→ 打开系统 Sound Picker（`Currently set / My Sounds / Pixel Sounds / Gems`，含 SAVE）→ 返回编辑页不崩溃、按钮仍显示"默认闹钟铃声"（未选择时不变更）。
+
+> 环境备注：期间模拟器进程句柄残留（进程名是 `qemu-system-x86_64-headless`）导致 AVD 被占、全量测试卡在 16/369；清理锁文件并重启后 **369/369** 全绿。
 ## 6. 已知未覆盖项
 
 - 真实跨设备 NSD 发现（模拟器只覆盖了 127.0.0.1 回环；真机需同热点）

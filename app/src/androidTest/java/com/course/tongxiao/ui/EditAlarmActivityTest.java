@@ -3,6 +3,7 @@ package com.course.tongxiao.ui;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import android.app.PendingIntent;
@@ -297,5 +298,83 @@ public class EditAlarmActivityTest {
                     com.course.tongxiao.engine.challenge.ChallengeConfig
                             .fromJson(stored.challengeOverrideJson).wrongPolicy);
         }
+    }
+    /** New alarms follow the system alarm sound: the row stays "默认闹钟铃声". */
+    @Test
+    public void newAlarm_keepsTheDefaultRingtone() throws Exception {
+        try (ActivityScenario<EditAlarmActivity> scenario =
+                     ActivityScenario.launch(EditAlarmActivity.class)) {
+            Thread.sleep(600);
+            scenario.onActivity(activity -> {
+                ((EditText) activity.findViewById(R.id.edit_label)).setText("默认铃声闹钟");
+                android.widget.Button ringtone = activity.findViewById(R.id.edit_ringtone);
+                assertNotNull("ringtone row exists", ringtone);
+                assertEquals("default label until the user picks a sound",
+                        activity.getString(R.string.edit_ringtone_default),
+                        String.valueOf(ringtone.getText()));
+            });
+            saveViaButton(scenario);
+            Thread.sleep(1500);
+
+            Alarm stored = null;
+            for (Alarm alarm : db.alarmDao().getAll()) {
+                if ("默认铃声闹钟".equals(alarm.label)) {
+                    stored = alarm;
+                }
+            }
+            assertNotNull(stored);
+            created.add(stored.id);
+            assertNull("no override: the alarm follows the device setting",
+                    stored.ringtoneUri);
+        }
+    }
+
+    /** Editing an alarm with a chosen sound must keep that sound on save. */
+    @Test
+    public void editingAnAlarm_preservesTheChosenRingtone() throws Exception {
+        Alarm seed = new Alarm();
+        seed.label = "自定义铃声";
+        seed.hour = 6;
+        seed.minute = 15;
+        seed.enabled = true;
+        seed.ringtoneUri = "content://media/internal/audio/media/12345";
+        seed.id = (int) db.alarmDao().insert(seed);
+
+        Intent intent = new Intent(ctx, EditAlarmActivity.class)
+                .putExtra(EditAlarmActivity.EXTRA_ALARM_ID, seed.id);
+        try (ActivityScenario<EditAlarmActivity> scenario = ActivityScenario.launch(intent)) {
+            Thread.sleep(1000);
+            scenario.onActivity(activity -> {
+                android.widget.Button ringtone = activity.findViewById(R.id.edit_ringtone);
+                assertNotNull(ringtone);
+                // Unknown/unreadable sounds fall back to a clear message, never a crash
+                // and never the "default" label (the alarm is not on the default).
+                assertFalse("must not claim to be the default",
+                        activity.getString(R.string.edit_ringtone_default)
+                                .contentEquals(ringtone.getText()));
+            });
+            saveViaButton(scenario);
+            Thread.sleep(1500);
+
+            assertEquals("the chosen sound survives the round trip",
+                    "content://media/internal/audio/media/12345",
+                    db.alarmDao().getById(seed.id).ringtoneUri);
+        } finally {
+            db.alarmDao().deleteById(seed.id);
+        }
+    }
+    /** Picker results: "default" and "nothing" both mean "follow the device". */
+    @Test
+    public void pickedRingtone_isNormalizedToNullForTheSystemDefault() {
+        android.net.Uri defaultAlarm = android.media.RingtoneManager.getDefaultUri(
+                android.media.RingtoneManager.TYPE_ALARM);
+        android.net.Uri custom = android.net.Uri.parse(
+                "content://media/internal/audio/media/777");
+
+        assertNull("nothing picked", EditAlarmActivity.normalizePickedRingtone(null, defaultAlarm));
+        assertNull("the default alarm uri means default",
+                EditAlarmActivity.normalizePickedRingtone(defaultAlarm, defaultAlarm));
+        assertEquals("a real sound is stored as-is", custom.toString(),
+                EditAlarmActivity.normalizePickedRingtone(custom, defaultAlarm));
     }
 }

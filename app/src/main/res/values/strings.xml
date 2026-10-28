@@ -25,6 +25,11 @@
     <string name="edit_snooze_title">贪睡间隔（分钟）</string>
     <string name="edit_snooze_value">%1$d 分钟</string>
     <string name="edit_vibrate">响铃时振动</string>
+    <string name="edit_ringtone_title">铃声</string>
+    <string name="edit_ringtone_default">默认闹钟铃声</string>
+    <string name="edit_ringtone_helper">点上面可以选择系统铃声（选择器里可以试听）</string>
+    <string name="edit_ringtone_pick">选择铃声</string>
+    <string name="edit_ringtone_unavailable">无法读取这首歌的名字，将按所选播放</string>
     <string name="edit_challenge">停铃挑战</string>
     <string name="edit_challenge_off">关闭</string>
     <string name="edit_challenge_quiz">选择题</string>
