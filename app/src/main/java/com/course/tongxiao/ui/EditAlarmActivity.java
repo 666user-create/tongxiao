@@ -79,6 +79,8 @@ public class EditAlarmActivity extends AppCompatActivity {
     private MaterialButtonToggleGroup questionSourceGroup;
     private MaterialButton mineButton;
     private TextView questionSourceHint;
+    private TextView wrongPolicyLabel;
+    private MaterialButtonToggleGroup wrongPolicyGroup;
     private com.course.tongxiao.engine.challenge.CustomQuestionStore customQuestionStore;
     private MaterialSwitch advanceWeatherSwitch;
     private MaterialSwitch shareToGroupSwitch;
@@ -139,6 +141,9 @@ public class EditAlarmActivity extends AppCompatActivity {
         questionSourceGroup = findViewById(R.id.edit_question_source);
         mineButton = findViewById(R.id.question_source_mine);
         questionSourceHint = findViewById(R.id.edit_question_source_hint);
+        wrongPolicyLabel = findViewById(R.id.edit_wrong_policy_label);
+        wrongPolicyGroup = findViewById(R.id.edit_wrong_policy);
+        wrongPolicyGroup.check(R.id.wrong_policy_retry);
         customQuestionStore = new com.course.tongxiao.engine.challenge.CustomQuestionStore(
                 getApplicationContext());
         challengeModeGroup.addOnButtonCheckedListener((group, checkedId, isChecked) -> {
@@ -396,6 +401,30 @@ public class EditAlarmActivity extends AppCompatActivity {
         return Alarm.RepeatMode.WORKDAY_SMART;
     }
 
+    private int policyButtonId(@NonNull ChallengeConfig.WrongPolicy policy) {
+        switch (policy) {
+            case ADD_SNOOZE:
+                return R.id.wrong_policy_cooldown;
+            case ESCALATE:
+                return R.id.wrong_policy_harder;
+            case RETRY:
+            default:
+                return R.id.wrong_policy_retry;
+        }
+    }
+
+    @NonNull
+    private ChallengeConfig.WrongPolicy selectedWrongPolicy() {
+        int checked = wrongPolicyGroup.getCheckedButtonId();
+        if (checked == R.id.wrong_policy_cooldown) {
+            return ChallengeConfig.WrongPolicy.ADD_SNOOZE;
+        }
+        if (checked == R.id.wrong_policy_harder) {
+            return ChallengeConfig.WrongPolicy.ESCALATE;
+        }
+        return ChallengeConfig.WrongPolicy.RETRY;
+    }
+
     /** Reflects a stored challenge config on the mode + question-source selectors. */
     private void checkChallengeMode(@NonNull ChallengeConfig config) {
         int id;
@@ -416,6 +445,7 @@ public class EditAlarmActivity extends AppCompatActivity {
         questionSourceGroup.check(config.questionSource
                 == ChallengeConfig.QuestionSource.MY_OWN
                 ? R.id.question_source_mine : R.id.question_source_builtin);
+        wrongPolicyGroup.check(policyButtonId(config.wrongPolicy));
     }
 
     /**
@@ -427,6 +457,8 @@ public class EditAlarmActivity extends AppCompatActivity {
         questionSourceLabel.setVisibility(quiz ? View.VISIBLE : View.GONE);
         questionSourceGroup.setVisibility(quiz ? View.VISIBLE : View.GONE);
         questionSourceHint.setVisibility(quiz ? View.VISIBLE : View.GONE);
+        wrongPolicyLabel.setVisibility(quiz ? View.VISIBLE : View.GONE);
+        wrongPolicyGroup.setVisibility(quiz ? View.VISIBLE : View.GONE);
         if (quiz) {
             int customCount = customQuestionStore.size();
             mineButton.setEnabled(customCount > 0);
@@ -444,7 +476,8 @@ public class EditAlarmActivity extends AppCompatActivity {
     private String selectedChallengeJson() {
         int checked = challengeModeGroup.getCheckedButtonId();
         if (checked == R.id.challenge_mode_quiz) {
-            ChallengeConfig config = ChallengeConfig.quizDefault();
+            ChallengeConfig config = ChallengeConfig.quizDefault()
+                    .withWrongPolicy(selectedWrongPolicy());
             if (questionSourceGroup.getCheckedButtonId() == R.id.question_source_mine) {
                 config = config.withQuestionSource(ChallengeConfig.QuestionSource.MY_OWN);
             }

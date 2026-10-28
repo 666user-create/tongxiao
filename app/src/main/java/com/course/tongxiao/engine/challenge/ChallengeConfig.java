@@ -90,6 +90,13 @@ public class ChallengeConfig {
                 shakeCount, source);
     }
 
+    /** @return a copy with a different wrong-answer penalty (everything else kept). */
+    @NonNull
+    public ChallengeConfig withWrongPolicy(@NonNull WrongPolicy policy) {
+        return new ChallengeConfig(mode, questionCount, types, policy, delaySeconds,
+                shakeCount, questionSource);
+    }
+
     /** Config produced by the edit-screen 摇一摇 option (5 shakes). */
     public static ChallengeConfig shakeDefault() {
         return new ChallengeConfig(Mode.SHAKE, 2,

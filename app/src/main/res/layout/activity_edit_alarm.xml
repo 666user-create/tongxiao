@@ -405,6 +405,54 @@
             </com.google.android.material.button.MaterialButtonToggleGroup>
 
             <TextView
+                android:id="@+id/edit_wrong_policy_label"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:text="@string/edit_wrong_policy_label"
+                android:textColor="@color/ink"
+                android:textSize="14sp"
+                android:visibility="gone" />
+
+            <com.google.android.material.button.MaterialButtonToggleGroup
+                android:id="@+id/edit_wrong_policy"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:visibility="gone"
+                app:selectionRequired="true"
+                app:singleSelection="true">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/wrong_policy_retry"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="44dp"
+                    android:insetLeft="2dp"
+                    android:insetRight="2dp"
+                    android:text="@string/edit_wrong_policy_retry" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/wrong_policy_cooldown"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="44dp"
+                    android:insetLeft="2dp"
+                    android:insetRight="2dp"
+                    android:text="@string/edit_wrong_policy_cooldown" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/wrong_policy_harder"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="44dp"
+                    android:insetLeft="2dp"
+                    android:insetRight="2dp"
+                    android:text="@string/edit_wrong_policy_harder" />
+
+            </com.google.android.material.button.MaterialButtonToggleGroup>
+
+            <TextView
                 android:id="@+id/edit_question_source_hint"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"

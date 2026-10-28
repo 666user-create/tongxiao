@@ -249,4 +249,57 @@ public class UnlockActivityTest {
             db.alarmDao().deleteById(id);
         }
     }
+    /**
+     * ESCALATE must be a real penalty: a wrong answer appends a harder question (the
+     * total grows) and the strike counter is visible.
+     */
+    @Test
+    public void wrongAnswerWithEscalate_addsAHarderQuestion() throws Exception {
+        Alarm a = new Alarm();
+        a.label = "加难测试";
+        a.hour = 7;
+        a.minute = 0;
+        a.enabled = true;
+        a.challengeOverrideJson = ChallengeConfig.quizDefault()
+                .withWrongPolicy(ChallengeConfig.WrongPolicy.ESCALATE).toJson();
+        int id = (int) db.alarmDao().insert(a);
+        try {
+            Intent intent = new Intent(ctx, UnlockActivity.class)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    .putExtra(UnlockActivity.EXTRA_ALARM_ID, id);
+            try (ActivityScenario<UnlockActivity> scenario = ActivityScenario.launch(intent)) {
+                Thread.sleep(1200);
+                final String[] before = {""};
+                scenario.onActivity(activity -> before[0] = text(
+                        activity.findViewById(R.id.unlock_progress)));
+                assertTrue("starts at question 1 of 2", before[0].contains("1 / 2"));
+
+                // Tap every visible option once; one of them is wrong (wrong policy adds
+                // a question), then read the progress + feedback lines.
+                for (int i = 0; i < 4; i++) {
+                    final int idx = i;
+                    scenario.onActivity(activity -> {
+                        android.view.View button = activity.findViewById(
+                                idx == 0 ? R.id.btn_opt_0 : idx == 1 ? R.id.btn_opt_1
+                                        : idx == 2 ? R.id.btn_opt_2 : R.id.btn_opt_3);
+                        if (button != null && button.getVisibility() == android.view.View.VISIBLE) {
+                            button.performClick();
+                        }
+                    });
+                    Thread.sleep(150);
+                }
+                scenario.onActivity(activity -> {
+                    String progress = text(activity.findViewById(R.id.unlock_progress));
+                    assertTrue("the harder question grew the session: " + progress,
+                            progress.contains(" / 3") || progress.contains(" / 4"));
+                });
+            }
+        } finally {
+            db.alarmDao().deleteById(id);
+        }
+    }
+
+    private static String text(TextView view) {
+        return view.getText() == null ? "" : view.getText().toString();
+    }
 }

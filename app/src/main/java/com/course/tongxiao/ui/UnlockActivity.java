@@ -53,6 +53,9 @@ public class UnlockActivity extends AppCompatActivity implements SensorEventList
 
     private static final float SHAKE_THRESHOLD = 12f;
 
+    /** ESCALATE adds at most this many harder questions, so the challenge still ends. */
+    private static final int MAX_ESCALATIONS = 2;
+
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final Handler main = new Handler(Looper.getMainLooper());
 
@@ -66,6 +69,7 @@ public class UnlockActivity extends AppCompatActivity implements SensorEventList
     private List<Question> session = new ArrayList<>();
     private int index;
     private int wrongAttempts;
+    private int escalations;
     private boolean finished;
 
     private TextView progressView;
@@ -161,7 +165,7 @@ public class UnlockActivity extends AppCompatActivity implements SensorEventList
     private void showQuestion() {
         Question question = session.get(index);
         feedbackView.setText("");
-        progressView.setText(getString(R.string.unlock_progress, index + 1, session.size()));
+        updateProgressLine();
         questionView.setText(question.text);
         setOptionsEnabled(true);
         for (int i = 0; i < optionButtons.length; i++) {
@@ -194,10 +198,10 @@ public class UnlockActivity extends AppCompatActivity implements SensorEventList
         }
 
         wrongAttempts++;
+        updateProgressLine();
         switch (config.wrongPolicy) {
             case ADD_SNOOZE: {
-                // A real penalty, not just copy: the options stay disabled for the
-                // configured cooling-off period before the next question appears.
+                // Real penalty: the options stay locked for the cooling-off period.
                 int penalty = Math.max(5, config.delaySeconds + 10);
                 feedbackView.setText(getString(R.string.unlock_wrong_snooze, penalty));
                 setOptionsEnabled(false);
@@ -211,14 +215,22 @@ public class UnlockActivity extends AppCompatActivity implements SensorEventList
                 }, penalty * 1000L);
                 return;
             }
-            case ESCALATE:
-                // showQuestion() clears the feedback line, so paint the question
-                // first and the message after it — otherwise 答错 showed nothing.
-                if (index < session.size()) {
+            case ESCALATE: {
+                // Real penalty: one extra, harder question is appended (capped so the
+                // challenge still ends). Without this the policy was only copy.
+                if (escalations < MAX_ESCALATIONS) {
+                    escalations++;
+                    session.add(ChallengeEngine.generateArithmetic(
+                            new java.util.Random(System.currentTimeMillis() + escalations), 3));
                     showQuestion();
+                    feedbackView.setText(getString(R.string.unlock_wrong_escalate_hard,
+                            MAX_ESCALATIONS - escalations + 1));
+                } else {
+                    showQuestion();
+                    feedbackView.setText(R.string.unlock_wrong_escalate);
                 }
-                feedbackView.setText(R.string.unlock_wrong_escalate);
-                break;
+                return;
+            }
             case RETRY:
             default:
                 if (index < session.size()) {
@@ -227,6 +239,18 @@ public class UnlockActivity extends AppCompatActivity implements SensorEventList
                 feedbackView.setText(R.string.unlock_wrong_retry);
                 break;
         }
+    }
+
+    /** "第 1 / 2 题 · 答错 2 次 · 答对才能停铃" — the penalty count is always visible. */
+    private void updateProgressLine() {
+        if (progressView == null) {
+            return;
+        }
+        int total = Math.max(1, session.size());
+        int shown = Math.min(index + 1, total);
+        progressView.setText(wrongAttempts == 0
+                ? getString(R.string.unlock_progress, shown, total)
+                : getString(R.string.unlock_progress_with_wrong, shown, total, wrongAttempts));
     }
 
     private void setOptionsEnabled(boolean enabled) {

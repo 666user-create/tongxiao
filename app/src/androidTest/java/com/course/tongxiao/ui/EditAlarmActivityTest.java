@@ -267,4 +267,35 @@ public class EditAlarmActivityTest {
             store.clear();
         }
     }
+    /** The wrong-answer penalty is per alarm and must survive a save/load round trip. */
+    @Test
+    public void choosingACoolingPenalty_persistsTheWrongPolicy() throws Exception {
+        try (ActivityScenario<EditAlarmActivity> scenario =
+                     ActivityScenario.launch(EditAlarmActivity.class)) {
+            Thread.sleep(800);
+            scenario.onActivity(activity -> {
+                ((EditText) activity.findViewById(R.id.edit_label)).setText("冷卻惩罚闹钟");
+                activity.findViewById(R.id.challenge_mode_quiz).performClick();
+            });
+            Thread.sleep(300);
+            scenario.onActivity(activity ->
+                    activity.findViewById(R.id.wrong_policy_cooldown).performClick());
+
+            saveViaButton(scenario);
+            Thread.sleep(1500);
+
+            Alarm stored = null;
+            for (Alarm alarm : db.alarmDao().getAll()) {
+                if ("冷卻惩罚闹钟".equals(alarm.label)) {
+                    stored = alarm;
+                }
+            }
+            assertNotNull("alarm persisted", stored);
+            created.add(stored.id);
+            assertNotNull(stored.challengeOverrideJson);
+            assertEquals(com.course.tongxiao.engine.challenge.ChallengeConfig.WrongPolicy.ADD_SNOOZE,
+                    com.course.tongxiao.engine.challenge.ChallengeConfig
+                            .fromJson(stored.challengeOverrideJson).wrongPolicy);
+        }
+    }
 }
