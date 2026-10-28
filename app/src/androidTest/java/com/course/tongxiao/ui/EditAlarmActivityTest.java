@@ -132,8 +132,17 @@ public class EditAlarmActivityTest {
                 .putExtra(EditAlarmActivity.EXTRA_ALARM_ID, seed.id);
         try (ActivityScenario<EditAlarmActivity> scenario = ActivityScenario.launch(intent)) {
             Thread.sleep(800);
+            // Deleting asks for confirmation first: the history is wiped with the row,
+            // so a mis-tap next to 保存 must not be destructive.
             scenario.onActivity(activity ->
                     activity.findViewById(R.id.edit_delete).performClick());
+            Thread.sleep(800);
+            assertNotNull("tapping 删除 must NOT delete before confirmation",
+                    db.alarmDao().getById(seed.id));
+
+            // Confirmed path (the dialog's positive button calls exactly this).
+            Alarm target = db.alarmDao().getById(seed.id);
+            scenario.onActivity(activity -> activity.deleteAlarm(target));
             Thread.sleep(1500);
 
             assertNotNull("row deleted", db.alarmDao().getById(seed.id) == null ? "gone" : null);

@@ -6,6 +6,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -32,6 +33,19 @@ public class AlarmListFragment extends Fragment {
     private RecyclerView list;
     private View emptyState;
     private TextView subtitle;
+
+    // First-run permission guidance (notification / exact alarm).
+    private View permissionBanner;
+    private TextView permissionBannerText;
+    private android.widget.Button permissionBannerAction;
+
+    /**
+     * API 31 constant spelled out: referencing
+     * Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM from minSdk 26 trips lint's
+     * InlinedApi check, and the value is a plain string only used on Android 12/12L.
+     */
+    private static final String ACTION_REQUEST_EXACT_ALARM =
+            "android.settings.REQUEST_SCHEDULE_EXACT_ALARM";
 
     @Nullable
     @Override
@@ -79,6 +93,82 @@ public class AlarmListFragment extends Fragment {
         viewModel.getTomorrowStatus().observe(getViewLifecycleOwner(), subtitle::setText);
 
         view.findViewById(R.id.add_alarm).setOnClickListener(v -> openEditor(null));
+        setUpPermissionBanner(view);
+    }
+
+    /**
+     * A denied notification or exact-alarm permission silently degrades the alarm
+     * (no lock-screen stop page / a few minutes late). Rather than let the user find
+     * out on a real morning, the list screen says so and offers a one-tap deep link.
+     */
+    private void setUpPermissionBanner(@NonNull View view) {
+        permissionBanner = view.findViewById(R.id.permission_banner);
+        TextView bannerText = view.findViewById(R.id.permission_banner_text);
+        view.findViewById(R.id.permission_banner_action).setOnClickListener(v -> {
+            String action = (String) v.getTag();
+            if (action == null || !openSystemSettings(action)) {
+                Toast.makeText(requireContext(), R.string.permission_banner_failed,
+                        Toast.LENGTH_LONG).show();
+            }
+        });
+        permissionBannerAction = view.findViewById(R.id.permission_banner_action);
+        permissionBannerText = bannerText;
+    }
+
+    /** @return true when a settings screen was opened. */
+    private boolean openSystemSettings(@NonNull String action) {
+        try {
+            Intent intent = new Intent(action);
+            if (!(getActivity() instanceof android.app.Activity)) {
+                return false;
+            }
+            if (android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS.equals(action)) {
+                intent.setData(android.net.Uri.parse("package:" + requireContext().getPackageName()));
+            }
+            startActivity(intent);
+            return true;
+        } catch (RuntimeException e) {
+            return false;
+        }
+    }
+
+    private void refreshPermissionBanner() {
+        if (permissionBanner == null || !isAdded()) {
+            return;
+        }
+        boolean notificationsGranted = android.os.Build.VERSION.SDK_INT
+                < android.os.Build.VERSION_CODES.TIRAMISU
+                || requireContext().checkSelfPermission(
+                android.Manifest.permission.POST_NOTIFICATIONS)
+                == android.content.pm.PackageManager.PERMISSION_GRANTED;
+        boolean exactGranted = true;
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S
+                && android.os.Build.VERSION.SDK_INT <= android.os.Build.VERSION_CODES.S_V2) {
+            android.app.AlarmManager am = (android.app.AlarmManager)
+                    requireContext().getSystemService(android.content.Context.ALARM_SERVICE);
+            exactGranted = am == null || am.canScheduleExactAlarms();
+        }
+
+        switch (PermissionBanner.resolve(android.os.Build.VERSION.SDK_INT,
+                notificationsGranted, exactGranted)) {
+            case NOTIFICATIONS:
+                showBanner(R.string.permission_banner_notification,
+                        android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS);
+                break;
+            case EXACT_ALARMS:
+                showBanner(R.string.permission_banner_exact, ACTION_REQUEST_EXACT_ALARM);
+                break;
+            case NONE:
+            default:
+                permissionBanner.setVisibility(View.GONE);
+                break;
+        }
+    }
+
+    private void showBanner(int messageRes, @NonNull String settingsAction) {
+        permissionBanner.setVisibility(View.VISIBLE);
+        permissionBannerText.setText(messageRes);
+        permissionBannerAction.setTag(settingsAction);
     }
 
     /**
@@ -121,6 +211,7 @@ public class AlarmListFragment extends Fragment {
         if (viewModel != null) {
             viewModel.refreshTomorrowStatus();
         }
+        refreshPermissionBanner(); // the user may have just returned from settings
     }
 
     /** Hand-rolled factory: no DI framework in this project by design. */

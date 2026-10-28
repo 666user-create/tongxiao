@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Backup policy (Android 12+). The app keeps everything on-device by design:
+  alarms, roommate links and the group code are local state, so letting the system
+  copy them into a cloud backup or a device transfer would create confusing
+  duplicates ("why does my new phone already have a dorm group?").
+  allowBackup is false for the same reason; this file is the explicit statement of
+  that intent that Android 12+ asks for.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="external" path="." />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="external" path="." />
+    </device-transfer>
+</data-extraction-rules>

@@ -53,6 +53,14 @@ public class GroupManager implements PeerLink.Listener {
         void onPeerMessage(@NonNull String deviceId, @NonNull GroupMessage message);
     }
 
+    /**
+     * Optional sink for transport problems the page should explain instead of leaving
+     * the user staring at a silently empty member list.
+     */
+    public interface StatusListener {
+        void onDiscoveryUnavailable(@NonNull String reason);
+    }
+
     private final TongxiaoDb db;
     private final GroupIdentity identity;
     private final GroupCoordinator coordinator;
@@ -66,6 +74,7 @@ public class GroupManager implements PeerLink.Listener {
 
     private volatile PeerServer server;
     private volatile Observer observer;
+    private volatile StatusListener statusListener;
     private volatile boolean closed;
 
     public GroupManager(@NonNull TongxiaoDb db, @NonNull SettingsStore settings,
@@ -91,6 +100,10 @@ public class GroupManager implements PeerLink.Listener {
 
     public void setObserver(@Nullable Observer observer) {
         this.observer = observer;
+    }
+
+    public void setStatusListener(@Nullable StatusListener listener) {
+        this.statusListener = listener;
     }
 
     /**
@@ -160,6 +173,10 @@ public class GroupManager implements PeerLink.Listener {
             @Override
             public void onStartFailed(@NonNull String reason) {
                 Log.w(TAG, "NSD unavailable: " + reason);
+                StatusListener target = statusListener;
+                if (target != null) {
+                    target.onDiscoveryUnavailable(reason);
+                }
             }
         };
     }

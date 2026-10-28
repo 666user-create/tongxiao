@@ -37,6 +37,16 @@ public interface AlarmDao {
     int setEnabled(int id, boolean enabled);
 
     /**
+     * Bulk opt-in for schedule sharing, used when a group is created or joined: rows
+     * that predate the group would otherwise stay {@code sharedToGroup = false} and
+     * never reach any peer's mirror (design.md §4 SYNC_PUSH).
+     *
+     * @return rows affected
+     */
+    @Query("UPDATE alarms SET sharedToGroup = :shared")
+    int setSharedToAll(boolean shared);
+
+    /**
      * @return rows affected. Does NOT touch alarm_events — deleting an alarm
      * must go through AlarmRepository.deleteWithEvents (design.md §3.3).
      */

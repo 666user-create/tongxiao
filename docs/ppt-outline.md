@@ -33,7 +33,7 @@ UI(Fragment/Activity) → ViewModel/LiveData → 引擎(节假日/触发/挑战/
 
 ## P7 停铃挑战（演示爆点）
 - 离线算术题生成器 + 30 题题库；题数 1–5、题型可选、答错策略三种
-- 安全阀：长按 3 秒紧急停止，记 `EMERGENCY_STOP`（自适应可区分"真起床"与"逃生"）
+- 安全阀：长按紧急停止（固定可见，任何字号都不出屏），记 `EMERGENCY_STOP`（自适应可区分"真起床"与"逃生"）
 - 防恶搞：来自舍友的配置一律 `clamped()`（题数/延迟/摇动次数硬上限）
 
 ## P8 局域网互助（第二个演示爆点）
@@ -53,7 +53,7 @@ UI(Fragment/Activity) → ViewModel/LiveData → 引擎(节假日/触发/挑战/
   1. 镜像表主键用自增 id → 对端重装后会**静音错闹钟**（改为 uid + 唯一索引）
   2. 删除闹钟接受 id=0 → 静默删掉别人的事件（加前置校验）
   3. 停铃页返回键没停服务 → **铃声无法停止**（通知加停止 action + 返回键停铃）
-- 测试：110+ instrumentation 用例；断言下沉到系统状态（`getNextAlarmClock`/`getActiveNotifications`/`FLAG_NO_CREATE`）
+- 测试：330+ instrumentation 用例；断言下沉到系统状态（`getNextAlarmClock`/`getActiveNotifications`/`FLAG_NO_CREATE`）
 
 ## P11 演示脚本（现场 3 分钟）
 1. 列表页副标题"明天是调休补班日" → 新建 07:30 智能工作日闹钟

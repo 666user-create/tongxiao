@@ -175,9 +175,12 @@ public class AlarmReceiver extends BroadcastReceiver {
                 Log.w(TAG, "fallback notification blocked: POST_NOTIFICATIONS denied");
                 return;
             }
+            // The channel may not exist yet (fresh install where the service never
+            // started): posting to a missing channel is dropped silently.
+            RingService.ensureChannel(appContext);
             androidx.core.app.NotificationCompat.Builder builder =
-                    new NotificationCompat.Builder(appContext, "alarm_ringing")
-                            .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+                    new NotificationCompat.Builder(appContext, RingService.channelId())
+                            .setSmallIcon(R.drawable.ic_launcher_foreground)
                             .setContentTitle(appContext.getString(R.string.ring_notification_title))
                             .setContentText(appContext.getString(R.string.ring_fallback_text))
                             .setPriority(NotificationCompat.PRIORITY_HIGH)

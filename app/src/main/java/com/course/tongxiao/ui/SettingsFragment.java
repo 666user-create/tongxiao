@@ -83,6 +83,11 @@ public class SettingsFragment extends Fragment {
                 () -> settings.setGroupMasterSwitchOn(checked)));
 
         renderRegion();
+        // Until the catalog is parsed the picker cannot open; say "loading", not
+        // "unavailable" (the old copy accused the data of being broken).
+        regionPick.setEnabled(false);
+        regionHint.setVisibility(View.VISIBLE);
+        regionHint.setText(R.string.settings_region_loading);
         regionPick.setOnClickListener(v -> openRegionPicker());
         view.findViewById(R.id.settings_region_clear).setOnClickListener(v -> clearRegion());
 
@@ -137,6 +142,9 @@ public class SettingsFragment extends Fragment {
                 && !catalog.provinces().isEmpty();
         regionPick.setEnabled(available);
         regionHint.setVisibility(available ? View.GONE : View.VISIBLE);
+        if (!available) {
+            regionHint.setText(R.string.settings_region_degraded);
+        }
     }
 
     private void openRegionPicker() {

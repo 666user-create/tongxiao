@@ -20,12 +20,16 @@ import android.os.Vibrator;
 import android.text.TextUtils;
 import android.util.Log;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 
 import com.course.tongxiao.MainActivity;
 import com.course.tongxiao.R;
 import com.course.tongxiao.data.TongxiaoDb;
+import com.course.tongxiao.data.repository.AlarmRepository;
+import com.course.tongxiao.engine.HolidayCalendar;
+import com.course.tongxiao.engine.HolidayResolver;
 import com.course.tongxiao.data.entity.Alarm;
 
 import java.util.concurrent.ExecutorService;
@@ -53,6 +57,9 @@ public class RingService extends Service {
     public static final String EXTRA_ALARM_ID = AlarmIntents.EXTRA_ALARM_ID;
 
     private static final String CHANNEL_ID = "alarm_ringing";
+
+    /** Upper bound for one ring (10 minutes): "宁可不响到没电". */
+    private static final long MAX_RING_DURATION_MS = 10L * 60 * 1000;
     private static final int NOTIFICATION_ID = 1001;
     private static final int REQ_STOP_ACTION = 2001;
 
@@ -93,10 +100,55 @@ public class RingService extends Service {
         return ringingAlarmId;
     }
 
+    /** @return the ring channel id, so callers cannot hard-code a wrong one. */
+    public static String channelId() {
+        return CHANNEL_ID;
+    }
+
     /** @return wall-clock time the current ring started, or 0. */
     public static long currentRingStartedAt() {
         return ringingStartedAt;
     }
+
+    /**
+     * Records the stop that came from the notification action. Runs on a worker so
+     * the service is not blocked, and swallows failures: the ring is already silent
+     * by then, and a bookkeeping error must not crash the process.
+     */
+    private void recordStoppedFromNotification() {
+        final int id = alarmId > 0 ? alarmId : ringingAlarmId;
+        final long startedAt = ringingStartedAt > 0 ? ringingStartedAt : ringStartedAt;
+        if (id <= 0) {
+            return;
+        }
+        final android.content.Context context = getApplicationContext();
+        io.execute(() -> {
+            try {
+                TongxiaoDb db = TongxiaoDb.get(context);
+                AlarmRepository repository = new AlarmRepository(db);
+                HolidayResolver resolver = new HolidayResolver(
+                        HolidayCalendar.loadFromAssets(context));
+                AlarmScheduler scheduler = new AlarmScheduler(context, repository, resolver);
+                Alarm alarm = db.alarmDao().getById(id);
+                if (alarm != null) {
+                    new RingActions(db, repository, scheduler)
+                            .onStopped(alarm, startedAt, "user");
+                }
+            } catch (RuntimeException e) {
+                Log.e(TAG, "stop bookkeeping from notification failed for " + id, e);
+            }
+        });
+    }
+
+    /** Fires once per ring; see MAX_RING_DURATION_MS. */
+    private final Runnable ringTimeout = () -> {
+        Log.w(TAG, "ring exceeded the maximum duration; stopping");
+        recordTimeoutThenShutdown();
+    };
+
+    /** Bookkeeping executor: never blocks the service thread. */
+    private final java.util.concurrent.ExecutorService io =
+            java.util.concurrent.Executors.newSingleThreadExecutor();
 
     @Override
     public void onCreate() {
@@ -111,6 +163,11 @@ public class RingService extends Service {
             return START_NOT_STICKY;
         }
         if (ACTION_STOP_RING.equals(intent.getAction())) {
+            // The notification's 停止 action must do the SAME bookkeeping as the stop
+            // screen: recording the event feeds the trend/adaptive samples, and for a
+            // ONCE alarm it also switches the row off (otherwise a stopped one-shot
+            // stays visible as "enabled" but never rings again — a zombie row).
+            recordStoppedFromNotification();
             shutdown();
             return START_NOT_STICKY;
         }
@@ -178,6 +235,11 @@ public class RingService extends Service {
         ringingStartedAt = ringStartedAt();
         acquireWakeLock();
         startPlayer(alarm == null ? null : alarm.ringtoneUri);
+        // Safety net: if neither the stop screen nor the notification is reachable
+        // (notification permission denied, screen on and nobody taps), an alarm would
+        // otherwise ring until the battery dies. Cap it.
+        main.removeCallbacks(ringTimeout);
+        main.postDelayed(ringTimeout, MAX_RING_DURATION_MS);
         if (alarm == null || alarm.vibrate) {
             startVibrator();
         }
@@ -296,15 +358,27 @@ public class RingService extends Service {
     }
 
     private void createChannel() {
-        NotificationManager nm = getSystemService(NotificationManager.class);
+        ensureChannel(this);
+    }
+
+    /**
+     * Creates the ring channel if it does not exist yet.
+     *
+     * <p>Public and static on purpose: {@code AlarmReceiver} posts a fallback
+     * notification when starting the foreground service is refused, and posting to a
+     * channel that was never created is dropped silently — the user would get no
+     * notification at all on a fresh install where the service never started.
+     */
+    public static void ensureChannel(@NonNull Context context) {
+        NotificationManager nm = context.getSystemService(NotificationManager.class);
         if (nm == null) {
             return;
         }
         NotificationChannel channel = new NotificationChannel(
                 CHANNEL_ID,
-                getString(R.string.ring_channel_name),
+                context.getString(R.string.ring_channel_name),
                 NotificationManager.IMPORTANCE_HIGH);
-        channel.setDescription(getString(R.string.ring_channel_desc));
+        channel.setDescription(context.getString(R.string.ring_channel_desc));
         channel.setSound(null, null); // sound comes from MediaPlayer, not the channel
         channel.enableVibration(false);
         // bypassDnd needs notification-policy access and would be silently ignored;
@@ -312,8 +386,39 @@ public class RingService extends Service {
         nm.createNotificationChannel(channel);
     }
 
+    private void recordTimeoutThenShutdown() {
+        final int id = ringingAlarmId > 0 ? ringingAlarmId : alarmId;
+        final long startedAt = ringingStartedAt > 0 ? ringingStartedAt : ringStartedAt;
+        shutdown();
+        if (id <= 0) {
+            stopSelf();
+            return;
+        }
+        final android.content.Context context = getApplicationContext();
+        io.execute(() -> {
+            try {
+                TongxiaoDb db = TongxiaoDb.get(context);
+                AlarmRepository repository = new AlarmRepository(db);
+                AlarmScheduler scheduler = new AlarmScheduler(context, repository,
+                        new HolidayResolver(HolidayCalendar.loadFromAssets(context)));
+                Alarm alarm = db.alarmDao().getById(id);
+                if (alarm != null) {
+                    // Same state transition as a manual stop, with its own source so
+                    // the stats can tell "unattended" apart from "got up".
+                    new RingActions(db, repository, scheduler)
+                            .onStopped(alarm, startedAt, "timeout");
+                }
+            } catch (RuntimeException e) {
+                Log.e(TAG, "timeout bookkeeping failed for " + id, e);
+            } finally {
+                stopSelf();
+            }
+        });
+    }
+
     /** Releases audio/vibration/wakelock and removes the notification. */
     private void shutdown() {
+        main.removeCallbacks(ringTimeout);
         ringing = false;
         ringingAlarmUid = null;
         ringingAlarmId = -1;
@@ -353,6 +458,7 @@ public class RingService extends Service {
 
     @Override
     public void onDestroy() {
+        io.shutdown();
         destroyed = true;
         ringing = false;
         ringingAlarmUid = null;

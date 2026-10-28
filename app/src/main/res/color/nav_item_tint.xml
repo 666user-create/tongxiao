@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Bottom-navigation item tint: the selected tab must be visibly different from
+     the others (a single flat colour made all four tabs look identical). -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:color="@color/green_primary" android:state_checked="true" />
+    <item android:color="@color/muted" />
+</selector>

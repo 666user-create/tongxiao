@@ -1,13 +1,13 @@
 # 同晓 · 测试报告
 
 > 生成方式：本文件由用户在模拟器 `Pixel_7_API_36` 上实跑的 `gradlew connectedDebugAndroidTest` 结果与各里程碑关卡记录汇总。
-> 状态：**已完成**（最终全量运行：322 tests / 0 failed / 0 skipped，模拟器 Pixel_7_API_36）
+> 状态：**已完成**（最终全量运行：328 tests / 0 failed / 0 skipped，模拟器 Pixel_7_API_36）
 
 ## 1. 结论速览
 
 | 项目 | 结果 |
 |---|---|
-| 单元/集成测试（instrumentation） | **322 tests / 0 failed / 0 errors / 0 skipped** |
+| 单元/集成测试（instrumentation） | **328 tests / 0 failed / 0 errors / 0 skipped** |
 | 构建（G1，含 lint） | `BUILD SUCCESSFUL`，lint **0 error**，仅余 2 条已知提示 |
 | 手动验证（G5） | 保存落库、滚轮时间选择、响铃全链路、Provider 只读、双机互助（见 §4） |
 
@@ -98,6 +98,27 @@
 | MINOR | 远程静音与用户停铃重复记两条 STOPPED | 污染榜单向导与自适应样本 | `RingActions.onStopped` 5 秒去重窗口 + 测试 |
 | MINOR | 响铃瞬间 `currentRingingUid` 仍为 null | 该窗口内的静音被回 NOT_RINGING | `RingService` 增加同步可知的 `currentRingingAlarmId`，网关兜底匹配 |
 | MINOR | 区县轮自绑定监听、榜单文案写"平均"（实为中位数）、保存可双击、旧城市值静默落成北京 | 各种小偏差/重复插入 | 逐项修掉 |
+
+## 5.2 第二轮 G4 评审（用户视角 / 健壮性）抓出并修复的问题
+
+| 级别 | 问题 | 后果 | 修复 |
+|---|---|---|---|
+| P0 | `Alarm.sharedToGroup` 全仓无写入点（只被读） | 镜像恒空 → 宿舍页永远不显示"正在响/静音"，互助演示只剩"看到昵称" | 字段默认改 true + 建组/入组时 `AlarmDao.setSharedToAll(true)` 回填历史行 + 编辑页新增「共享给宿舍组」开关 |
+| P0 | 代设/授权在 UI 上不存在（`setGrantedMask`、`setRequest` 零调用） | 文档让验收人去点不存在的按钮 | 权限 chips 可点（逐项授权）+ 成员行「申请代设」+ 入站 `NOTIFY_OP`/`SET_RESPONSE` 操作流 + 失败原因文案 |
+| P0 | 挑战开启后点"停止/稍后"必崩：`postDelayed` 未取消 + executor 已 shutdown | `RejectedExecutionException` 弹"屡次停止运行"，正好命中演示 B 段 | Runnable 字段化，`onPause`/`onDestroy` 取消回调，`stopAndFinish` 前置 `isFinishing()` 早退 |
+| P1 | 通知栏"停止"只静音不记账 | 统计丢样本；ONCE 闹钟留"开着但永不响"的僵尸行 | `RingService` 停止分支在 worker 上补 `RingActions.onStopped`（与停铃页同语义） |
+| P1 | 编辑页异步读库未完成时点保存 → 插入一条 07:30 的重复闹钟 | 用户看到"列表里多了个闹钟" | 加 `loaded` 守卫，读取完成前保存只提示"稍等" |
+| P1 | 删除无二次确认（且级联清历史） | 配置好的闹钟被一键永久删除 | 二次确认对话框（含闹钟名与"不可恢复"） |
+| P1 | 挑战页无滚动容器，大字号/小屏会顶掉"紧急停止" | 唯一逃生口不可见 → 违反"不能困人" | 题目区改 ScrollView，紧急停止固定在底部（不参与滚动） |
+| P1 | 底部导航 4 个 tab 同色（无选中态） | 看不出当前在哪个 tab | 新增 `color/nav_item_tint.xml` 状态选择器 |
+| P1 | 小字 `muted` 对比度 4.2:1（低于 WCAG AA） | 11–13sp 的"下次：…"等看不清 | `#6F7D6E` → `#5A6759`（≈5.4:1） |
+| P1 | 权限被拒后静默降级，无任何引导 | 用户不知道"锁屏不亮屏/晚几分钟"是权限问题 | 列表页权限横幅（通知/精确闹钟两种，带跳转），决策逻辑抽 `PermissionBanner` 并单测 |
+| P1 | 天气"已关联"不反映真实结果 | 演示时"提前响"可能静默空转 | 保持"失败不提前"语义；设置页改为可选真实状态（v1 记录在案） |
+| P2 | Provider projection/selection 原样拼 SQL（exported） | 可用子查询读到 `group_members` 等其它表 | 列白名单 + selection/sortOrder 形态校验，越界抛 `IllegalArgumentException` |
+| P2 | 兜底通知硬编码频道 id，频道未创建时静默丢失 | 极端情况下完全无通知 | `RingService.ensureChannel()` 静态化并在兜底前调用 |
+| P2 | 无最大响铃时长 | 停铃页不可达时会响到没电 | 10 分钟上限，超时记账 `source=timeout` 后自停 |
+| P2 | 挑战 ADD_SNOOZE 只改文案、反馈不清理、README 写"可选 1–5 题" | 策略名不副实 / 文案与实际不符 | 真实冷却（禁用选项 N 秒后换题）、每题清空反馈、文档改成"引擎支持 1–5 题，v1 界面固定 2 题" |
+| P2 | 列表底部被 FAB 压住、地区按钮在加载中报"数据不可用"、榜单空态双文案、Switch 无 contentDescription、"长按 3 秒"文案与实际长按不符 | 各种打磨瑕疵 | 逐项修掉（含文档 11 处口径对齐） |
 ## 6. 已知未覆盖项
 
 - 真实跨设备 NSD 发现（模拟器只覆盖了 127.0.0.1 回环；真机需同热点）

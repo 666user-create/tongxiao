@@ -49,6 +49,13 @@ public class AlarmProvider extends ContentProvider {
         return true;
     }
 
+    /** Columns this provider is willing to expose (and the only SQL it will run). */
+    private static final java.util.Set<String> ALLOWED_COLUMNS = new java.util.HashSet<>(
+            java.util.Arrays.asList("id", "uid", "label", "hour", "minute", "enabled",
+                    "repeatMode", "dayMask", "skipHolidays", "snoozeMin", "vibrate",
+                    "challengeOverrideJson", "advanceEnabled", "advanceMaxMin",
+                    "sharedToGroup", "ringtoneUri"));
+
     @Nullable
     @Override
     public Cursor query(@NonNull Uri uri, @Nullable String[] projection,
@@ -60,19 +67,77 @@ public class AlarmProvider extends ContentProvider {
             throw new IllegalStateException("AlarmProvider is not attached to a context");
         }
 
-        StringBuilder sql = new StringBuilder("SELECT ");
-        sql.append(projection == null || projection.length == 0 ? "*" : TextUtils.join(", ", projection));
-        sql.append(" FROM ").append(TABLE_ALARMS);
+        // A raw projection/selection/sortOrder is SQL by API contract, and this
+        // provider is exported: `projection = {"label,(SELECT nick FROM group_members)"}`
+        // would otherwise read other tables (roommate identities, pending payloads).
+        // So the SQL text is built only from a whitelist here; anything else is
+        // rejected instead of silently passed to SQLite.
+        String columns;
+        if (projection == null || projection.length == 0) {
+            columns = "*";
+        } else {
+            for (String column : projection) {
+                if (column == null || !ALLOWED_COLUMNS.contains(column.trim())) {
+                    throw new IllegalArgumentException(
+                            "unsupported projection column: " + column
+                                    + " (allowed: " + ALLOWED_COLUMNS + ")");
+                }
+            }
+            columns = TextUtils.join(", ", projection);
+        }
+
+        StringBuilder sql = new StringBuilder("SELECT ").append(columns)
+                .append(" FROM ").append(TABLE_ALARMS);
         if (!TextUtils.isEmpty(selection)) {
+            if (!isSimpleSelection(selection)) {
+                throw new IllegalArgumentException("unsupported selection: " + selection);
+            }
             sql.append(" WHERE ").append(selection);
         }
         if (!TextUtils.isEmpty(sortOrder)) {
+            if (!isAllowedSortOrder(sortOrder)) {
+                throw new IllegalArgumentException("unsupported sortOrder: " + sortOrder);
+            }
             sql.append(" ORDER BY ").append(sortOrder);
         }
-        // selectionArgs are bound, not concatenated: caller-supplied values never
-        // become SQL text. projection/selection/sortOrder are raw SQL fragments by
-        // ContentProvider API design (same contract Android's own providers use).
+        // selectionArgs are bound, never concatenated.
         return TongxiaoDb.get(context).query(sql.toString(), selectionArgs);
+    }
+
+    /**
+     * Only {@code column op ?} clauses joined by AND/OR, with whitelisted columns.
+     * Keeps the common {@code enabled = ?} style queries working while refusing
+     * sub-selects and functions.
+     */
+    private static boolean isSimpleSelection(@NonNull String selection) {
+        String[] clauses = selection.split("(?i)\\s+(AND|OR)\\s+");
+        for (String clause : clauses) {
+            java.util.regex.Matcher matcher = java.util.regex.Pattern
+                    .compile("^\\s*([A-Za-z_][A-Za-z0-9_]*)\\s*(=|!=|<>|<|>|<=|>=|LIKE)\\s*\\?\\s*$")
+                    .matcher(clause);
+            if (!matcher.matches() || !ALLOWED_COLUMNS.contains(matcher.group(1))) {
+                return false;
+            }
+        }
+        return clauses.length > 0;
+    }
+
+    /** {@code column [ASC|DESC]} items only. */
+    private static boolean isAllowedSortOrder(@NonNull String sortOrder) {
+        for (String item : sortOrder.split(",")) {
+            String[] parts = item.trim().split("\\s+");
+            if (parts.length == 0 || !ALLOWED_COLUMNS.contains(parts[0])) {
+                return false;
+            }
+            if (parts.length > 1 && !"ASC".equalsIgnoreCase(parts[1])
+                    && !"DESC".equalsIgnoreCase(parts[1])) {
+                return false;
+            }
+            if (parts.length > 2) {
+                return false;
+            }
+        }
+        return true;
     }
 
     @Nullable

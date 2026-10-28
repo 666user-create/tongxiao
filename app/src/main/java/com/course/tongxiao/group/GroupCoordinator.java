@@ -79,6 +79,8 @@ public class GroupCoordinator {
     private final PeerStatsStore peerStats;
     /** STATS_PUSH packets that were not stored (invalid, unknown sender, master off). */
     private final AtomicInteger droppedStats = new AtomicInteger();
+    /** Last failure code of {@link #accept}, surfaced by the confirmation card. */
+    private volatile String lastDecisionFailure;
 
     public GroupCoordinator(@NonNull TongxiaoDb db, @NonNull SettingsStore settings,
                             @NonNull GroupIdentity identity, @NonNull AlarmGateway gateway,
@@ -177,6 +179,8 @@ public class GroupCoordinator {
 
     /** Correlation tag carried on mute ACKs, so the initiator can attribute the answer. */
     public static final String ACK_WHAT_MUTE = "MUTE:";
+    /** Correlation tag carried on SET_REQUEST ACKs ("SET:<reqId>"). */
+    public static final String ACK_WHAT_SET = "SET:";
 
     /** design.md §3.2: mute is the only no-confirmation operation. */
     private void handleMute(@NonNull String sender, @NonNull GroupMessage message,
@@ -282,25 +286,25 @@ public class GroupCoordinator {
     /** design.md §3.2: setting-class requests are queued, never applied on receipt. */
     private void handleSetRequest(@NonNull String sender, @NonNull GroupMessage message,
                                   @NonNull Reply reply) {
+        String reqId = message.string(GroupMessage.FIELD_REQ_ID, "").trim();
         if (!settings.isGroupMasterSwitchOn()) {
-            ack(reply, false, GroupProtocol.REASON_MASTER_SWITCH_OFF);
+            ackSet(reply, false, GroupProtocol.REASON_MASTER_SWITCH_OFF, reqId);
             return;
         }
         GroupMember member = db.groupMemberDao().getByDeviceId(sender);
         if (member == null || (member.grantedMask & GroupMember.PERM_SET) == 0) {
-            ack(reply, false, GroupProtocol.REASON_PERMISSION_DENIED);
+            ackSet(reply, false, GroupProtocol.REASON_PERMISSION_DENIED, reqId);
             return;
         }
-        String reqId = message.string(GroupMessage.FIELD_REQ_ID, "").trim();
         PendingRequest.Kind kind = RequestPayloads.kindOf(message.string(GroupMessage.FIELD_KIND, ""));
         JSONObject payload = message.object(GroupMessage.FIELD_PAYLOAD);
         if (reqId.isEmpty() || kind == null || payload == null) {
-            ack(reply, false, GroupProtocol.REASON_BAD_PAYLOAD);
+            ackSet(reply, false, GroupProtocol.REASON_BAD_PAYLOAD, reqId);
             return;
         }
         JSONObject normalized = RequestPayloads.normalize(kind, payload);
         if (normalized == null) {
-            ack(reply, false, GroupProtocol.REASON_BAD_PAYLOAD);
+            ackSet(reply, false, GroupProtocol.REASON_BAD_PAYLOAD, reqId);
             return;
         }
 
@@ -322,11 +326,16 @@ public class GroupCoordinator {
             boolean sameSenderPending = existing != null
                     && existing.status == PendingRequest.Status.PENDING
                     && sender.equals(existing.fromDeviceId);
-            ack(reply, sameSenderPending,
-                    sameSenderPending ? null : GroupProtocol.REASON_DUPLICATE_REQUEST);
+            ackSet(reply, sameSenderPending,
+                    sameSenderPending ? null : GroupProtocol.REASON_DUPLICATE_REQUEST, reqId);
             return;
         }
-        ack(reply, true, null);
+        ackSet(reply, true, null, reqId);
+    }
+
+    private static void ackSet(@NonNull Reply reply, boolean ok, @Nullable String reason,
+                               @NonNull String reqId) {
+        reply.send(GroupMessage.cmdAck(ok, reason, ACK_WHAT_SET + reqId));
     }
 
     /**
@@ -396,6 +405,7 @@ public class GroupCoordinator {
         }
         if (request.expireAt < System.currentTimeMillis()) {
             db.pendingRequestDao().setStatus(reqId, PendingRequest.Status.EXPIRED);
+            lastDecisionFailure = GroupProtocol.REASON_BAD_PAYLOAD; // expired = no longer valid
             return null;
         }
         String failure;
@@ -408,10 +418,21 @@ public class GroupCoordinator {
         if (failure != null) {
             Log.w(TAG, "request " + reqId + " could not be applied: " + failure);
             db.pendingRequestDao().setStatus(reqId, PendingRequest.Status.REJECTED);
+            lastDecisionFailure = failure;
             return null;
         }
         db.pendingRequestDao().setStatus(reqId, PendingRequest.Status.ACCEPTED);
+        lastDecisionFailure = null;
         return request;
+    }
+
+    /**
+     * Reason code produced by the most recent failed {@link #accept}, or null when it
+     * succeeded. The confirmation card shows it, so "同意" never fails silently.
+     */
+    @Nullable
+    public String lastDecisionFailure() {
+        return lastDecisionFailure;
     }
 
     /** Owner declines: nothing is applied. @return the rejected request, or null. */

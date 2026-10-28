@@ -27,6 +27,12 @@
     <string name="edit_challenge">停铃挑战（答对选择题才能停）</string>
     <string name="edit_advance_weather">天气不佳时提前响</string>
     <string name="edit_advance_weather_helper">需先在设置里选择地区；雨雪或 0℃ 以下时最多提前 20 分钟</string>
+    <string name="edit_share_group">共享给宿舍组</string>
+    <string name="edit_share_group_helper">共享后舍友能看到这个闹钟，并在它响时帮你静音</string>
+    <string name="edit_delete_confirm_title">删除这个闹钟？</string>
+    <string name="edit_delete_confirm_text">「%1$s」将被永久删除，历史和统计记录也会一起清掉，无法恢复。</string>
+    <string name="edit_loading_wait">正在读取闹钟设置，请稍等一下再保存</string>
+    <string name="alarm_switch_desc">%1$s 开关</string>
     <string name="edit_challenge_helper">默认关闭。开启后需答对 2 道选择题，长按 3 秒可紧急停止</string>
     <string name="edit_need_day">自定义星期至少选一天</string>
     <string name="edit_time_title">设置时间</string>
@@ -53,6 +59,10 @@
         <item>周日</item>
     </string-array>
     <string name="alarm_add">新建闹钟</string>
+    <string name="permission_banner_action">去开启</string>
+    <string name="permission_banner_notification">通知权限未开启：锁屏时可能看不到停铃页，会只响铃不亮屏</string>
+    <string name="permission_banner_exact">精确闹钟权限未开启：闹钟可能延迟几分钟，建议开启</string>
+    <string name="permission_banner_failed">无法打开系统设置，请手动到「设置 → 应用 → 同晓」中开启</string>
     <string name="day_mon">一</string>
     <string name="day_tue">二</string>
     <string name="day_wed">三</string>
@@ -73,6 +83,7 @@
     <string name="settings_region_pick">选择地区（省 / 市 / 区县）</string>
     <string name="settings_region_none">未选择地区</string>
     <string name="settings_region_degraded">地区数据不可用，暂时无法选择地区</string>
+    <string name="settings_region_loading">正在加载地区数据…</string>
     <string name="settings_region_saved">已选择：%1$s</string>
     <string name="settings_region_reregister">旧的城市设置无法对应到新选择器，请重新选择地区</string>
     <string name="settings_city_clear">清除</string>
@@ -85,7 +96,7 @@
 
     <!-- Step 4.2/4.3 challenge -->
     <string name="unlock_progress">第 %1$d / %2$d 题 · 答对才能停铃</string>
-    <string name="unlock_emergency">长按 3 秒 · 紧急停止</string>
+    <string name="unlock_emergency">长按 · 紧急停止（不计入起床统计）</string>
     <string name="unlock_correct">答对了</string>
     <string name="unlock_wrong_retry">答错了，再想想</string>
     <string name="unlock_wrong_snooze">答错，贪睡 +%1$d 秒</string>

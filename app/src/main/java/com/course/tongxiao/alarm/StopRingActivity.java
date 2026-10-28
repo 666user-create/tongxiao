@@ -52,6 +52,8 @@ public class StopRingActivity extends Activity {
 
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final Handler main = new Handler(Looper.getMainLooper());
+    /** Posted on a delay; MUST be cancelled when the screen goes away. */
+    private final Runnable autoChallenge = this::stopAndFinish;
 
     private TongxiaoDb db;
     private RingActions actions;
@@ -162,12 +164,21 @@ public class StopRingActivity extends Activity {
 
     /** Silences the ring, or hands over to the challenge when one is configured. */
     private void stopAndFinish() {
+        // The auto-challenge runnable is posted on a delay; if the user already
+        // stopped (or the screen is going away) this callback must be a no-op, not a
+        // second pass through the worker.
+        if (isFinishing() || isDestroyed()) {
+            return;
+        }
         disableButtons();
         final int id = alarmId;
         final long startedAt = ringStartedAt;
         worker.execute(() -> {
             ChallengeConfig config = resolveConfig(id);
             runOnUiThread(() -> {
+                if (isFinishing() || isDestroyed()) {
+                    return;
+                }
                 if (config != null && config.mode != ChallengeConfig.Mode.DIRECT) {
                     // Step 4.2: the ring keeps going until the challenge is passed.
                     startActivity(new Intent(this, UnlockActivity.class)
@@ -218,7 +229,10 @@ public class StopRingActivity extends Activity {
             }
             int delaySeconds = Math.max(0, Math.min(ChallengeConfig.MAX_DELAY_SECONDS,
                     config.delaySeconds));
-            runOnUiThread(() -> main.postDelayed(this::stopAndFinish, delaySeconds * 1000L));
+            runOnUiThread(() -> {
+                main.removeCallbacks(autoChallenge);
+                main.postDelayed(autoChallenge, delaySeconds * 1000L);
+            });
         });
     }
 
@@ -264,7 +278,18 @@ public class StopRingActivity extends Activity {
     }
 
     @Override
+    protected void onPause() {
+        // The auto-challenge runnable is posted on a delay. Leaving the screen means
+        // it must not fire later against a finished activity: that used to reach a
+        // shut-down executor and crash with RejectedExecutionException on the UI
+        // thread — exactly when the user had just tapped 停止 with a challenge set.
+        main.removeCallbacks(autoChallenge);
+        super.onPause();
+    }
+
+    @Override
     protected void onDestroy() {
+        main.removeCallbacksAndMessages(null);
         // Graceful shutdown: an interrupt mid-write could lose the STOPPED event
         // and the re-arm, which would silently skip tomorrow's alarm.
         worker.shutdown();

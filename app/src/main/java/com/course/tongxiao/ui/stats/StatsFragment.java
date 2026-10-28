@@ -56,7 +56,6 @@ public class StatsFragment extends Fragment {
     private TextView remoteCount;
     private TextView leaderboardStatus;
     private LinearLayout leaderboardRows;
-    private TextView leaderboardEmpty;
 
     /** Broadcasts at most every 5 minutes: snapshots are best-effort, not chatty. */
     private long lastBroadcastAt;
@@ -93,7 +92,6 @@ public class StatsFragment extends Fragment {
         snoozeRows[2] = view.findViewById(R.id.stats_snooze_row_3);
         leaderboardStatus = view.findViewById(R.id.stats_leaderboard_status);
         leaderboardRows = view.findViewById(R.id.stats_leaderboard_rows);
-        leaderboardEmpty = view.findViewById(R.id.stats_leaderboard_empty);
 
         // Load as soon as the view exists: a host can add this fragment while the
         // activity is only STARTED (multi-window, or a tab host that caps the
@@ -244,14 +242,12 @@ public class StatsFragment extends Fragment {
         if (peers.isEmpty()) {
             // Exactly one message: either "join a group" or "waiting for the first
             // sync". Showing both read like two different problems.
-            leaderboardEmpty.setVisibility(View.GONE);
             leaderboardStatus.setText(hasGroupSession()
                     ? getString(R.string.stats_leaderboard_hint)
                     : getString(R.string.stats_leaderboard_empty_room));
             return;
         }
 
-        leaderboardEmpty.setVisibility(View.GONE);
         int staleCount = 0;
         long newestReceivedAt = 0;
         for (com.course.tongxiao.group.PeerSnapshot peer : peers) {

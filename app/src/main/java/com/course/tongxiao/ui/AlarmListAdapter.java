@@ -107,6 +107,9 @@ public class AlarmListAdapter extends ListAdapter<Alarm, AlarmListAdapter.VH> {
             label.setText(alarm.label == null || alarm.label.isEmpty()
                     ? ctx.getString(R.string.alarm_default_label) : alarm.label);
             rule.setText(ruleText(ctx, alarm));
+            // Screen readers otherwise announce only "开关"; name the alarm it belongs to.
+            toggle.setContentDescription(ctx.getString(R.string.alarm_switch_desc,
+                    label.getText()));
             next.setText(nextText(ctx, alarm, nextCalculator));
             itemView.setAlpha(alarm.enabled ? 1f : 0.5f);
 

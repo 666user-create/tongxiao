@@ -157,8 +157,10 @@ public class UnlockActivity extends AppCompatActivity implements SensorEventList
 
     private void showQuestion() {
         Question question = session.get(index);
+        feedbackView.setText("");
         progressView.setText(getString(R.string.unlock_progress, index + 1, session.size()));
         questionView.setText(question.text);
+        setOptionsEnabled(true);
         for (int i = 0; i < optionButtons.length; i++) {
             Button button = optionButtons[i];
             if (i < question.options.size()) {
@@ -177,22 +179,35 @@ public class UnlockActivity extends AppCompatActivity implements SensorEventList
             return;
         }
         if (question.isCorrect(chosen)) {
-            feedbackView.setText(R.string.unlock_correct);
             index++;
             if (index >= session.size()) {
+                feedbackView.setText(R.string.unlock_correct);
                 passAndStop();
             } else {
                 showQuestion();
+                feedbackView.setText(R.string.unlock_correct);
             }
             return;
         }
 
         wrongAttempts++;
         switch (config.wrongPolicy) {
-            case ADD_SNOOZE:
-                feedbackView.setText(getString(R.string.unlock_wrong_snooze,
-                        Math.max(5, config.delaySeconds + 10)));
-                break;
+            case ADD_SNOOZE: {
+                // A real penalty, not just copy: the options stay disabled for the
+                // configured cooling-off period before the next question appears.
+                int penalty = Math.max(5, config.delaySeconds + 10);
+                feedbackView.setText(getString(R.string.unlock_wrong_snooze, penalty));
+                setOptionsEnabled(false);
+                main.postDelayed(() -> {
+                    if (finished) {
+                        return;
+                    }
+                    setOptionsEnabled(true);
+                    index = Math.min(index + 1, Math.max(0, session.size() - 1));
+                    showQuestion();
+                }, penalty * 1000L);
+                return;
+            }
             case ESCALATE:
                 feedbackView.setText(R.string.unlock_wrong_escalate);
                 break;
@@ -203,6 +218,12 @@ public class UnlockActivity extends AppCompatActivity implements SensorEventList
         }
         if (index < session.size()) {
             showQuestion();
+        }
+    }
+
+    private void setOptionsEnabled(boolean enabled) {
+        for (Button button : optionButtons) {
+            button.setEnabled(enabled);
         }
     }
 

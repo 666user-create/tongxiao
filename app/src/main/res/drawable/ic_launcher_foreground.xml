@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Launcher icon: an alarm clock face in white on the brand green.
+     Simplified on purpose — at 48dp on a launcher only the outline reads. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Bell body -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M54,30c-9.94,0 -18,8.06 -18,18v12l-4,6h44l-4,-6V48c0,-9.94 -8.06,-18 -18,-18z" />
+    <!-- Base bar -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M34,69h40v5h-40z" />
+    <!-- Clapper -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M54,78c3.31,0 6,-2.69 6,-6H48c0,3.31 2.69,6 6,6z" />
+    <!-- Bell legs (left/right handles) -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M33,33l-6,-6l4,-4l6,6z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M75,33l6,-6l-4,-4l-6,6z" />
+</vector>

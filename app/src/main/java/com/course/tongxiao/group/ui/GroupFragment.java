@@ -1,10 +1,13 @@
 package com.course.tongxiao.group.ui;
 
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Context;
 import android.graphics.Typeface;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.text.InputType;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.LayoutInflater;
@@ -17,21 +20,21 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
+import androidx.lifecycle.ViewModelProvider;
 
 import com.course.tongxiao.R;
-import com.course.tongxiao.data.SettingsStore;
 import com.course.tongxiao.data.TongxiaoDb;
+import com.course.tongxiao.data.entity.Alarm;
 import com.course.tongxiao.data.entity.GroupMember;
 import com.course.tongxiao.data.entity.PendingRequest;
 import com.course.tongxiao.data.entity.RemoteAlarm;
-import com.course.tongxiao.group.AlarmGateway;
 import com.course.tongxiao.group.GroupCleanup;
 import com.course.tongxiao.group.GroupCoordinator;
 import com.course.tongxiao.group.GroupIdentity;
 import com.course.tongxiao.group.GroupManager;
-import com.course.tongxiao.group.GroupSession;
 import com.course.tongxiao.group.GroupWiring;
 import com.course.tongxiao.group.PeerStatsStore;
 import com.course.tongxiao.group.net.NsdDiscovery;
@@ -43,37 +46,33 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.security.SecureRandom;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.RejectedExecutionException;
+import java.util.UUID;
 
 /**
  * Dorm-group page (design.md §7 ④ / §5.5).
  *
  * <p>Two states only: "not in a group" (create or join with a 6-digit code) and
- * "in a group" (code + my nick, member list with permission chips, each peer's
- * shared alarms with the one no-confirmation action "静音", and the confirmation
- * queue for incoming setting requests).
+ * "in a group" (code + my nick, per-member permission chips, each peer's shared
+ * alarms with the no-confirmation "静音" action, the setting-request confirmation
+ * queue, and an in-memory operation log).
  *
- * <p><b>Session lifetime:</b> the fragment owns the {@link GroupManager} plus
- * {@link NsdDiscovery}; they start when the view is created and stop when the view
- * is destroyed. Deliberately <em>not</em> tied to onStart/onStop: when my alarm
- * rings, the full-screen stop page covers MainActivity, and a link torn down at
- * that moment would break exactly the scenario the feature exists for (a roommate
- * muting my ringing alarm). design.md §4 also describes the holder as
- * "本机后台常驻", so the connection outlives the visible page; it ends with the view
- * or the process, which keeps the course scope honest (no extra Service).
+ * <p><b>Session lifetime:</b> the transport lives in {@link GroupSessionViewModel},
+ * which survives configuration changes — rotating the screen rebuilds the views but
+ * keeps the TCP links and the NSD registration (design.md §4 "本机后台常驻"). The
+ * session is released when the hosting activity really goes away.
  *
- * <p>Rows are built in code instead of a RecyclerView adapter: the lists are at most
- * a few dorm members, and this keeps the whole page in one readable file (no new
+ * <p>Rows are built in code instead of a RecyclerView adapter: the lists hold at
+ * most a few dorm members, and this keeps the page in one readable file (no new
  * dependency, no extra layout files).
  */
 public class GroupFragment extends Fragment {
@@ -83,31 +82,42 @@ public class GroupFragment extends Fragment {
     /** Payload keys of the clamped request JSON (see RequestPayloads). */
     private static final String KEY_HOUR = "hour";
     private static final String KEY_MINUTE = "minute";
+    private static final String KEY_LABEL = "label";
+    private static final String KEY_REPEAT_MODE = "repeatMode";
+    private static final String KEY_SNOOZE_MIN = "snoozeMin";
+    private static final String KEY_VIBRATE = "vibrate";
 
     /** How many of a peer's shared alarms the member row lists. */
     private static final int MAX_MIRRORED_ALARMS = 5;
     /** Change-detection period for "my schedule / ringing state changed" pushes. */
     private static final long SYNC_POLL_MS = 5_000L;
-    /** CMD_ACK carries no correlation id, so only a fresh request may claim it. */
+    /** Mute ACKs are only accepted for a freshly sent request. */
     private static final long MUTE_ACK_WINDOW_MS = 10_000L;
+    private static final int MAX_OP_LOG_LINES = 20;
 
+    private GroupSessionViewModel session;
     private GroupIdentity identity;
     private TongxiaoDb db;
     private GroupManager manager;
     private NsdDiscovery discovery;
     private PeerStatsStore peerStats;
-    private ExecutorService io;
 
     private final Map<String, String> nickByDevice = new HashMap<>();
     /** deviceId → the peer's schedule as last pushed to me (RemoteAlarmDao mirror). */
     private final Map<String, List<RemoteAlarm>> mirrorsByOwner = new HashMap<>();
     private final Set<String> observedOwners = new HashSet<>();
     private List<GroupMember> lastMembers = Collections.emptyList();
+    /** Newest first; memory only (an operation log is not worth a table). */
+    private final Deque<String> opLog = new ArrayDeque<>();
 
     private final Handler syncHandler = new Handler(Looper.getMainLooper());
     private final Runnable syncTick = new Runnable() {
         @Override
         public void run() {
+            // Never poll while the page is not the one in front of the user (P2-7).
+            if (!isAdded() || isRemoving() || isHidden() || !isResumed()) {
+                return; // onResume() re-arms the tick
+            }
             pushScheduleIfChanged();
             syncHandler.postDelayed(this, SYNC_POLL_MS);
         }
@@ -115,6 +125,8 @@ public class GroupFragment extends Fragment {
     private volatile String lastSyncFingerprint;
     private volatile String pendingMuteOwner;
     private volatile long pendingMuteAt;
+    @Nullable
+    private volatile String nsdFailureReason;
 
     private LinearLayout joinCard;
     private LinearLayout panel;
@@ -125,17 +137,11 @@ public class GroupFragment extends Fragment {
     private TextView codeText;
     private TextView nickText;
     private TextView wiringWarning;
+    private TextView masterOffBanner;
+    private TextView nsdBanner;
+    private TextView shareSummary;
+    private TextView opLogView;
     private EditText codeInput;
-
-    @Override
-    public void onCreate(@Nullable Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        io = Executors.newSingleThreadExecutor(runnable -> {
-            Thread thread = new Thread(runnable, "group-ui-io");
-            thread.setDaemon(true);
-            return thread;
-        });
-    }
 
     @Nullable
     @Override
@@ -146,14 +152,13 @@ public class GroupFragment extends Fragment {
 
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
-        Context appContext = requireContext().getApplicationContext();
-        identity = new GroupIdentity(appContext);
-        db = TongxiaoDb.get(appContext);
-        peerStats = new PeerStatsStore(appContext);
-        AlarmGateway gateway = GroupWiring.gatewayOrNull();
-        manager = new GroupManager(db, new SettingsStore(appContext), identity,
-                gateway == null ? new UnavailableGateway() : gateway, peerStats);
-        discovery = new NsdDiscovery(appContext);
+        session = new ViewModelProvider(this, new GroupSessionViewModel.Factory(requireContext()))
+                .get(GroupSessionViewModel.class);
+        identity = session.identity();
+        db = session.db();
+        manager = session.manager();
+        discovery = session.discovery();
+        peerStats = session.peerStats();
 
         joinCard = view.findViewById(R.id.group_join_card);
         panel = view.findViewById(R.id.group_panel);
@@ -164,53 +169,92 @@ public class GroupFragment extends Fragment {
         codeText = view.findViewById(R.id.group_code_text);
         nickText = view.findViewById(R.id.group_nick_text);
         wiringWarning = view.findViewById(R.id.group_wiring_warning);
+        masterOffBanner = view.findViewById(R.id.group_master_off_banner);
+        nsdBanner = view.findViewById(R.id.group_nsd_banner);
+        shareSummary = view.findViewById(R.id.group_share_summary);
+        opLogView = view.findViewById(R.id.group_op_log);
         codeInput = view.findViewById(R.id.group_code_input);
 
         // Without an AlarmGateway the page still runs, but it must not pretend that
         // remote commands work: it says so and every remote action is refused.
-        wiringWarning.setVisibility(gateway == null ? View.VISIBLE : View.GONE);
+        wiringWarning.setVisibility(GroupWiring.gatewayOrNull() == null
+                ? View.VISIBLE : View.GONE);
 
         view.findViewById(R.id.group_create_button).setOnClickListener(v -> createGroup());
         view.findViewById(R.id.group_join_button).setOnClickListener(v -> joinGroup());
         view.findViewById(R.id.group_leave_button).setOnClickListener(v -> leaveGroup());
+        view.findViewById(R.id.group_copy_code_button).setOnClickListener(v -> copyGroupCode());
+        view.findViewById(R.id.group_nick_edit_button).setOnClickListener(v -> editNick());
 
         db.groupMemberDao().observeAll().observe(getViewLifecycleOwner(), this::renderMembers);
         db.pendingRequestDao().observeByStatus(PendingRequest.Status.PENDING)
                 .observe(getViewLifecycleOwner(), this::renderPending);
+        db.alarmDao().observeAll().observe(getViewLifecycleOwner(), this::renderShareSummary);
 
-        // Remote-command feedback (CMD_ACK) for the mute button.
+        // Remote-command feedback (ACKs) and the operation log.
         manager.setObserver(this::onPeerMessage);
+        manager.setStatusListener(reason -> {
+            nsdFailureReason = reason;
+            appendOp(getString(R.string.group_nsd_unavailable, reason));
+            // The op log is easy to miss, and "no roommates yet" looks like an empty
+            // group rather than a broken LAN discovery: say it out loud once.
+            if (isAdded() && getView() != null) {
+                com.google.android.material.snackbar.Snackbar.make(requireView(),
+                        getString(R.string.group_service_failed),
+                        com.google.android.material.snackbar.Snackbar.LENGTH_LONG).show();
+            }
+        });
 
         renderGroupState();
+        renderOpLog();
 
         // design.md §3.1: overdue confirmations are voided before the list is trusted.
-        submitIo(() -> manager.coordinator().expireOverdue());
+        session.submitIo(() -> manager.coordinator().expireOverdue());
 
-        // The session lives with the view, not with onStart/onStop: when my alarm
-        // starts ringing, the full-screen stop page covers MainActivity and would
-        // stop the link exactly when a roommate needs it to mute me. design.md §4
-        // even calls the holder "本机后台常驻", so the link outlives the visible page
-        // and only ends with the view/process.
-        startServices();
-        syncHandler.removeCallbacks(syncTick);
-        syncHandler.post(syncTick);
+        // Idempotent: after a rotation the same session is simply re-attached.
+        session.ensureStarted();
+        startPolling();
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        // The settings-page master switch may have changed while we were away.
+        renderGroupState();
+        startPolling();
+    }
+
+    @Override
+    public void onPause() {
+        stopPolling();
+        super.onPause();
     }
 
     @Override
     public void onDestroyView() {
-        syncHandler.removeCallbacks(syncTick);
-        stopServices();
-        super.onDestroyView();
-    }
-
-    @Override
-    public void onDestroy() {
-        ExecutorService executor = io;
-        io = null;
-        if (executor != null) {
-            executor.shutdown();
+        stopPolling();
+        if (manager != null) {
+            manager.setObserver(null);
+            manager.setStatusListener(null);
         }
-        super.onDestroy();
+        if (session != null) {
+            session.detachUi();
+        }
+        joinCard = null;
+        panel = null;
+        memberList = null;
+        pendingList = null;
+        memberEmpty = null;
+        pendingEmpty = null;
+        codeText = null;
+        nickText = null;
+        wiringWarning = null;
+        masterOffBanner = null;
+        nsdBanner = null;
+        shareSummary = null;
+        opLogView = null;
+        codeInput = null;
+        super.onDestroyView();
     }
 
     // ---- group membership ----
@@ -221,8 +265,7 @@ public class GroupFragment extends Fragment {
             toast(R.string.group_code_invalid);
             return;
         }
-        renderGroupState();
-        startServices();
+        afterJoiningGroup();
         toastText(getString(R.string.group_created, code));
     }
 
@@ -233,18 +276,32 @@ public class GroupFragment extends Fragment {
             return;
         }
         codeInput.getText().clear();
-        renderGroupState();
-        startServices();
+        afterJoiningGroup();
         toastText(getString(R.string.group_joined, entered));
+    }
+
+    /**
+     * Turns group membership into working traffic: existing alarms become shared
+     * (they were created before the group existed, so nothing would ever be pushed),
+     * the transport starts, and my schedule goes out immediately.
+     */
+    private void afterJoiningGroup() {
+        renderGroupState();
+        session.submitIo(() -> {
+            int rows = db.alarmDao().setSharedToAll(true);
+            Log.i(TAG, "shared " + rows + " existing alarm(s) with the group");
+            manager.broadcastSync();
+        });
+        session.ensureStarted();
     }
 
     private void leaveGroup() {
         identity.setGroupCode("");
-        stopServices();
-        submitIo(() -> {
+        session.submitIo(() -> {
             // §3.3 transactional cleanup + the cached leaderboard snapshots.
             int removed = GroupCleanup.removeAllMembers(db, peerStats);
             Log.i(TAG, "left the group, removed " + removed + " member row(s)");
+            manager.stop();
         });
         renderGroupState();
         toast(R.string.group_left);
@@ -255,47 +312,59 @@ public class GroupFragment extends Fragment {
         return String.format(Locale.US, "%06d", new SecureRandom().nextInt(1_000_000));
     }
 
-    // ---- services ----
-
-    private void startServices() {
-        renderGroupState();
-        // Publish the live manager so other screens (stats ranking) can broadcast
-        // their snapshot without owning the group lifecycle (see GroupSession).
-        GroupSession.attach(manager);
-        if (identity.groupCode().isEmpty()) {
+    private void copyGroupCode() {
+        String code = identity.groupCode();
+        if (code.isEmpty()) {
             return;
         }
-        submitIo(() -> {
-            int port = manager.start();
-            if (port <= 0) {
-                toast(R.string.group_service_failed);
-                return;
-            }
-            // Advertise the OS-assigned port and start browsing (design.md §4).
-            discovery.start(identity.nick(), port, manager.discoveryListener());
-        });
+        ClipboardManager clipboard = (ClipboardManager) requireContext()
+                .getSystemService(Context.CLIPBOARD_SERVICE);
+        if (clipboard == null) {
+            return;
+        }
+        clipboard.setPrimaryClip(ClipData.newPlainText(getString(R.string.group_code_copy), code));
+        toast(R.string.group_code_copied);
     }
 
-    private void stopServices() {
-        discovery.stop();
-        GroupSession.detach(manager);
-        submitIo(manager::stop);
+    private void editNick() {
+        Context context = requireContext();
+        EditText input = new EditText(context);
+        input.setHint(R.string.group_nick_hint);
+        input.setInputType(InputType.TYPE_CLASS_TEXT);
+        input.setText(identity.nick());
+        input.setSelection(input.getText().length());
+        LinearLayout box = new LinearLayout(context);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(20), dp(4), dp(20), 0);
+        box.addView(input);
+
+        new AlertDialog.Builder(context)
+                .setTitle(R.string.group_nick_edit_title)
+                .setView(box)
+                .setPositiveButton(R.string.dialog_ok, (dialog, which) -> {
+                    identity.setNick(input.getText().toString());
+                    renderGroupState();
+                    toast(R.string.group_nick_saved);
+                })
+                .setNegativeButton(R.string.dialog_cancel, null)
+                .show();
     }
+
+    // ---- transport helpers ----
 
     /**
      * Pushes my schedule when anything in it changed — in particular when an alarm
      * starts or stops ringing, which is what makes the peer's 静音 button appear.
      *
-     * <p>Why a comparison instead of a listener: the ringing flag is read live from
-     * the ring service by {@code buildSyncPush()}, and the group package must not
-     * hook into the service's internals. Polling the built message is the smallest
-     * reliable trigger, and it only sends when the content actually differs.
+     * <p>The ringing flag itself is read live from the ring service by
+     * {@code buildSyncPush()}; what was missing was a trigger, so the page compares
+     * the built message and only sends when the content really differs.
      */
     private void pushScheduleIfChanged() {
         if (identity == null || identity.groupCode().isEmpty()) {
             return;
         }
-        submitIo(() -> {
+        session.submitIo(() -> {
             if (identity.groupCode().isEmpty()) {
                 return;
             }
@@ -314,31 +383,59 @@ public class GroupFragment extends Fragment {
         });
     }
 
-    /**
-     * Inbound feedback for outgoing commands.
-     *
-     * <p>{@code CMD_ACK} has no request id (design.md §4), so mute answers are
-     * correlated by the {@code what} tag ("MUTE:<uid>"). An untagged ACK is never
-     * treated as a success — it is most likely a schedule-push acknowledgement — but
-     * a failure is still surfaced when a mute is in flight, so a denial is not lost
-     * when talking to a peer build without tags.
-     */
+    private void startPolling() {
+        syncHandler.removeCallbacks(syncTick);
+        syncHandler.post(syncTick);
+    }
+
+    private void stopPolling() {
+        syncHandler.removeCallbacks(syncTick);
+    }
+
+    // ---- inbound messages ----
+
     private void onPeerMessage(@NonNull String deviceId, @NonNull GroupMessage message) {
-        if (message.type() != GroupMessage.Type.CMD_ACK) {
+        switch (message.type()) {
+            case CMD_ACK:
+                handleAck(deviceId, message);
+                break;
+            case NOTIFY_OP:
+                if (message.string(GroupMessage.FIELD_WHAT, "").startsWith("MUTE")) {
+                    appendOp(getString(R.string.group_op_mute_received));
+                }
+                break;
+            case SET_RESPONSE:
+                appendOp(getString(message.bool(GroupMessage.FIELD_ACCEPT, false)
+                        ? R.string.group_op_set_response_accept
+                        : R.string.group_op_set_response_reject));
+                break;
+            default:
+                break;
+        }
+    }
+
+    /**
+     * ACKs are attributed by their {@code what} tag ("MUTE:<uid>" / "SET:<reqId>"):
+     * schedule pushes also produce an untagged ok ACK, and a mute must never be
+     * "confirmed" by one of those.
+     */
+    private void handleAck(@NonNull String deviceId, @NonNull GroupMessage message) {
+        boolean ok = message.bool(GroupMessage.FIELD_OK, false);
+        String what = message.string(GroupMessage.FIELD_WHAT, "");
+        if (what.startsWith(GroupCoordinator.ACK_WHAT_SET)) {
+            appendOp(ok ? getString(R.string.group_op_set_queued)
+                    : getString(R.string.group_op_set_denied,
+                    setFailureText(message.string(GroupMessage.FIELD_REASON, ""))));
             return;
+        }
+        if (!what.startsWith(GroupCoordinator.ACK_WHAT_MUTE)) {
+            return; // e.g. "your schedule arrived": not an answer to a command
         }
         String owner = pendingMuteOwner;
         if (owner == null || !owner.equals(deviceId)) {
             return;
         }
-        boolean fresh = System.currentTimeMillis() - pendingMuteAt <= MUTE_ACK_WINDOW_MS;
-        String what = message.string(GroupMessage.FIELD_WHAT, "");
-        boolean taggedMuteAck = what.startsWith(GroupCoordinator.ACK_WHAT_MUTE);
-        boolean ok = message.bool(GroupMessage.FIELD_OK, false);
-        if (!taggedMuteAck && ok) {
-            return; // e.g. "your schedule arrived" — not an answer to the mute
-        }
-        if (!fresh) {
+        if (System.currentTimeMillis() - pendingMuteAt > MUTE_ACK_WINDOW_MS) {
             pendingMuteOwner = null;
             return;
         }
@@ -370,6 +467,18 @@ public class GroupFragment extends Fragment {
         return getString(R.string.group_mute_failed, reason);
     }
 
+    @NonNull
+    private String setFailureText(@Nullable String reason) {
+        String code = reason == null ? "" : reason;
+        if (GroupProtocol.REASON_PERMISSION_DENIED.equals(code)) {
+            return getString(R.string.group_set_denied);
+        }
+        if (GroupProtocol.REASON_MASTER_SWITCH_OFF.equals(code)) {
+            return getString(R.string.group_set_blocked);
+        }
+        return code.isEmpty() ? getString(R.string.group_request_failed) : code;
+    }
+
     // ---- rendering ----
 
     private void renderGroupState() {
@@ -380,11 +489,43 @@ public class GroupFragment extends Fragment {
         boolean joined = !code.isEmpty();
         joinCard.setVisibility(joined ? View.GONE : View.VISIBLE);
         panel.setVisibility(joined ? View.VISIBLE : View.GONE);
+        renderBanners();
         if (!joined) {
             return;
         }
         codeText.setText(getString(R.string.group_code_label, code));
         nickText.setText(getString(R.string.group_nick_label, identity.nick()));
+    }
+
+    /** Master-switch and discovery warnings: silent failures are un-demoable. */
+    private void renderBanners() {
+        if (masterOffBanner == null) {
+            return;
+        }
+        boolean masterOn = session.settings().isGroupMasterSwitchOn();
+        masterOffBanner.setVisibility(masterOn ? View.GONE : View.VISIBLE);
+        String nsdReason = nsdFailureReason;
+        if (nsdReason == null) {
+            nsdBanner.setVisibility(View.GONE);
+        } else {
+            nsdBanner.setText(getString(R.string.group_nsd_unavailable, nsdReason));
+            nsdBanner.setVisibility(View.VISIBLE);
+        }
+    }
+
+    private void renderShareSummary(@Nullable List<Alarm> alarms) {
+        if (shareSummary == null) {
+            return;
+        }
+        int shared = 0;
+        if (alarms != null) {
+            for (Alarm alarm : alarms) {
+                if (alarm.sharedToGroup) {
+                    shared++;
+                }
+            }
+        }
+        shareSummary.setText(getString(R.string.group_share_summary, shared));
     }
 
     private void renderMembers(@Nullable List<GroupMember> members) {
@@ -443,6 +584,35 @@ public class GroupFragment extends Fragment {
         }
     }
 
+    private void renderOpLog() {
+        if (opLogView == null) {
+            return;
+        }
+        if (opLog.isEmpty()) {
+            opLogView.setVisibility(View.GONE);
+            return;
+        }
+        opLogView.setText(String.join("\n", new ArrayList<>(opLog)));
+        opLogView.setVisibility(View.VISIBLE);
+    }
+
+    /** Newest first, capped; safe to call from any thread. */
+    private void appendOp(@NonNull String line) {
+        if (getActivity() == null) {
+            return;
+        }
+        getActivity().runOnUiThread(() -> {
+            if (opLogView == null) {
+                return;
+            }
+            opLog.addFirst(line);
+            while (opLog.size() > MAX_OP_LOG_LINES) {
+                opLog.removeLast();
+            }
+            renderOpLog();
+        });
+    }
+
     private View buildMemberRow(@NonNull GroupMember member) {
         Context context = requireContext();
         LinearLayout row = new LinearLayout(context);
@@ -469,20 +639,13 @@ public class GroupFragment extends Fragment {
         titleRow.addView(name, nameParams);
         row.addView(titleRow);
 
+        // Chips are the grant editor: tapping one toggles that permission bit
+        // (design.md §3.1 grantedMask) and the peer is re-synced right away.
         LinearLayout chips = new LinearLayout(context);
         chips.setOrientation(LinearLayout.HORIZONTAL);
-        if (member.grantedMask == 0) {
-            chips.addView(buildChip(getString(R.string.group_member_no_perm), context));
-        }
-        if ((member.grantedMask & GroupMember.PERM_MUTE) != 0) {
-            chips.addView(buildChip(getString(R.string.perm_mute), context));
-        }
-        if ((member.grantedMask & GroupMember.PERM_SEE) != 0) {
-            chips.addView(buildChip(getString(R.string.perm_see), context));
-        }
-        if ((member.grantedMask & GroupMember.PERM_SET) != 0) {
-            chips.addView(buildChip(getString(R.string.perm_set), context));
-        }
+        chips.addView(buildGrantChip(member, GroupMember.PERM_MUTE, R.string.perm_mute, context));
+        chips.addView(buildGrantChip(member, GroupMember.PERM_SEE, R.string.perm_see, context));
+        chips.addView(buildGrantChip(member, GroupMember.PERM_SET, R.string.perm_set, context));
         LinearLayout.LayoutParams chipRowParams = wrapParams();
         chipRowParams.topMargin = dp(4);
         row.addView(chips, chipRowParams);
@@ -491,7 +654,46 @@ public class GroupFragment extends Fragment {
         if (shared != null && !shared.isEmpty()) {
             row.addView(buildSharedSchedule(member, shared));
         }
+
+        MaterialButton applyButton = new MaterialButton(context);
+        applyButton.setText(R.string.group_request_apply_button);
+        applyButton.setOnClickListener(v -> showAddAlarmDialog(member));
+        LinearLayout.LayoutParams applyParams = wrapParams();
+        applyParams.topMargin = dp(6);
+        row.addView(applyButton, applyParams);
         return row;
+    }
+
+    private View buildGrantChip(@NonNull GroupMember member, int permissionBit,
+                                int labelRes, @NonNull Context context) {
+        boolean granted = (member.grantedMask & permissionBit) != 0;
+        TextView chip = new TextView(context);
+        chip.setText(labelRes);
+        chip.setTextColor(ContextCompat.getColor(context,
+                granted ? R.color.green_on_container : R.color.muted));
+        chip.setTextSize(11);
+        chip.setBackgroundColor(ContextCompat.getColor(context,
+                granted ? R.color.green_container : R.color.line));
+        chip.setPadding(dp(8), dp(3), dp(8), dp(3));
+        chip.setOnClickListener(v -> toggleGrant(member, permissionBit, labelRes));
+        LinearLayout.LayoutParams params = wrapParams();
+        params.setMarginEnd(dp(6));
+        chip.setLayoutParams(params);
+        return chip;
+    }
+
+    private void toggleGrant(@NonNull GroupMember member, int permissionBit, int labelRes) {
+        int newMask = member.grantedMask ^ permissionBit;
+        boolean granted = (newMask & permissionBit) != 0;
+        session.submitIo(() -> {
+            db.groupMemberDao().setGrantedMask(member.deviceId, newMask);
+            if (permissionBit == GroupMember.PERM_SEE) {
+                // Visibility changed: refresh what that peer may see right away.
+                manager.broadcastSync();
+            }
+        });
+        toastText(getString(granted ? R.string.group_grant_on : R.string.group_grant_off,
+                getString(labelRes)));
     }
 
     /** The peer's shared schedule, plus the one no-confirmation action: mute. */
@@ -560,8 +762,8 @@ public class GroupFragment extends Fragment {
      * Sends CMD_MUTE for a peer's ringing alarm.
      *
      * <p>{@code ownerDev} is the alarm's owner — the receiving side (design.md §4),
-     * i.e. the member whose alarm this is. Using my own deviceId here would be
-     * rejected by that member: the command must target an alarm on the receiver.
+     * i.e. the member whose alarm this is; using my own deviceId would be rejected
+     * by that member.
      */
     private void requestMute(@NonNull GroupMember member, @NonNull RemoteAlarm alarm) {
         if (!manager.send(member.deviceId, GroupMessage.cmdMute(member.deviceId,
@@ -571,19 +773,6 @@ public class GroupFragment extends Fragment {
         }
         pendingMuteOwner = member.deviceId;
         pendingMuteAt = System.currentTimeMillis();
-    }
-
-    private View buildChip(@NonNull String text, @NonNull Context context) {
-        TextView chip = new TextView(context);
-        chip.setText(text);
-        chip.setTextColor(ContextCompat.getColor(context, R.color.green_on_container));
-        chip.setTextSize(11);
-        chip.setBackgroundColor(ContextCompat.getColor(context, R.color.green_container));
-        chip.setPadding(dp(8), dp(2), dp(8), dp(2));
-        LinearLayout.LayoutParams params = wrapParams();
-        params.setMarginEnd(dp(6));
-        chip.setLayoutParams(params);
-        return chip;
     }
 
     private View buildPendingRow(@NonNull PendingRequest request) {
@@ -656,38 +845,107 @@ public class GroupFragment extends Fragment {
         }
     }
 
-    // ---- decisions ----
+    // ---- setting requests ----
+
+    /** Minimal in-place editor for "please set an alarm for me" (ADD_ALARM). */
+    private void showAddAlarmDialog(@NonNull GroupMember member) {
+        Context context = requireContext();
+        LinearLayout box = new LinearLayout(context);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(20), dp(4), dp(20), 0);
+
+        EditText timeInput = new EditText(context);
+        timeInput.setHint(R.string.group_request_time_hint);
+        timeInput.setInputType(InputType.TYPE_CLASS_DATETIME);
+        EditText labelInput = new EditText(context);
+        labelInput.setHint(R.string.group_request_label_hint);
+        labelInput.setInputType(InputType.TYPE_CLASS_TEXT);
+        box.addView(timeInput);
+        box.addView(labelInput);
+
+        new AlertDialog.Builder(context)
+                .setTitle(R.string.group_request_dialog_title)
+                .setView(box)
+                .setPositiveButton(R.string.dialog_ok, (dialog, which) ->
+                        sendAddAlarmRequest(member, timeInput.getText().toString(),
+                                labelInput.getText().toString()))
+                .setNegativeButton(R.string.dialog_cancel, null)
+                .show();
+    }
+
+    private void sendAddAlarmRequest(@NonNull GroupMember member, @NonNull String timeText,
+                                     @NonNull String label) {
+        int[] time = parseTime(timeText);
+        if (time == null) {
+            toast(R.string.group_request_invalid_time);
+            return;
+        }
+        JSONObject payload = new JSONObject();
+        try {
+            payload.put(KEY_HOUR, time[0]);
+            payload.put(KEY_MINUTE, time[1]);
+            payload.put(KEY_LABEL, label.trim());
+            payload.put(KEY_REPEAT_MODE, Alarm.RepeatMode.DAILY.name());
+            payload.put(KEY_SNOOZE_MIN, 10);
+            payload.put(KEY_VIBRATE, true);
+        } catch (JSONException impossible) {
+            toast(R.string.group_request_invalid_time);
+            return;
+        }
+        if (!manager.send(member.deviceId, GroupMessage.setRequest(
+                UUID.randomUUID().toString(), "ADD_ALARM", payload))) {
+            toast(R.string.group_request_no_link);
+            return;
+        }
+        toast(R.string.group_request_sent);
+    }
+
+    /** @return {hour, minute} for "HH:mm", or null when it is not a valid clock time. */
+    @Nullable
+    private static int[] parseTime(@NonNull String text) {
+        String[] parts = text.trim().split(":");
+        if (parts.length != 2) {
+            return null;
+        }
+        try {
+            int hour = Integer.parseInt(parts[0].trim());
+            int minute = Integer.parseInt(parts[1].trim());
+            if (hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+                return null;
+            }
+            return new int[]{hour, minute};
+        } catch (NumberFormatException notANumber) {
+            return null;
+        }
+    }
 
     private void decide(@NonNull String reqId, boolean accept) {
-        submitIo(() -> {
+        session.submitIo(() -> {
             PendingRequest resolved = accept
                     ? manager.coordinator().accept(reqId)
                     : manager.coordinator().reject(reqId);
             if (resolved == null) {
-                toast(R.string.group_request_failed);
+                if (!accept) {
+                    toast(R.string.group_request_failed);
+                    return;
+                }
+                String reason = manager.coordinator().lastDecisionFailure();
+                toastText(reason == null
+                        ? getString(R.string.group_request_failed)
+                        : getString(R.string.group_request_accept_failed,
+                        setFailureText(reason)));
+                appendOp(getString(R.string.group_op_accept_failed,
+                        reason == null ? "" : setFailureText(reason)));
                 return;
             }
             // Tell the requesting peer the outcome (design.md §4 SET_RESPONSE).
             manager.send(resolved.fromDeviceId, GroupMessage.setResponse(reqId, accept));
             toast(accept ? R.string.group_request_accepted : R.string.group_request_rejected);
+            appendOp(getString(accept ? R.string.group_op_accept_ok : R.string.group_op_rejected));
         });
     }
 
     // ---- plumbing ----
-
-    /** Runs group work off the main thread; falls back to inline once shut down. */
-    private void submitIo(@NonNull Runnable task) {
-        ExecutorService executor = io;
-        if (executor == null || executor.isShutdown()) {
-            task.run();
-            return;
-        }
-        try {
-            executor.execute(task);
-        } catch (RejectedExecutionException rejected) {
-            task.run();
-        }
-    }
 
     private void toast(int stringRes) {
         toastText(getString(stringRes));
@@ -712,30 +970,5 @@ public class GroupFragment extends Fragment {
 
     private int dp(int value) {
         return Math.round(getResources().getDisplayMetrics().density * value);
-    }
-
-    /**
-     * Used only until the app installs a real gateway: it refuses instead of
-     * pretending, so a mis-wired build cannot silently "succeed" a remote mute.
-     */
-    private static final class UnavailableGateway implements AlarmGateway {
-        @Override
-        public boolean isRinging(@NonNull String alarmUid) {
-            return false;
-        }
-
-        @Nullable
-        @Override
-        public String mute(@NonNull String alarmUid, @NonNull String fromDeviceId) {
-            Log.w(TAG, "no AlarmGateway wired; refusing MUTE for " + alarmUid);
-            return GroupProtocol.REASON_INTERNAL_ERROR;
-        }
-
-        @Nullable
-        @Override
-        public String apply(@NonNull PendingRequest request) {
-            Log.w(TAG, "no AlarmGateway wired; refusing request " + request.reqId);
-            return GroupProtocol.REASON_INTERNAL_ERROR;
-        }
     }
 }

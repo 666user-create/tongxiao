@@ -16,9 +16,8 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:background="@color/card"
-        app:itemActiveIndicatorStyle="@null"
-        app:itemIconTint="@color/green_primary"
-        app:itemTextColor="@color/green_primary"
+        app:itemIconTint="@color/nav_item_tint"
+        app:itemTextColor="@color/nav_item_tint"
         app:labelVisibilityMode="labeled"
         app:menu="@menu/menu_bottom_nav" />
 

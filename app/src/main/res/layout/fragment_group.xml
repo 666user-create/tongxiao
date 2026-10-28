@@ -110,13 +110,67 @@
                 android:textSize="15sp"
                 android:textStyle="bold" />
 
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:orientation="horizontal">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/group_copy_code_button"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/group_code_copy" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/group_nick_edit_button"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/group_nick_edit" />
+
+            </LinearLayout>
+
             <TextView
                 android:id="@+id/group_nick_text"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
                 android:textColor="@color/muted"
                 android:textSize="12sp" />
+
+            <TextView
+                android:id="@+id/group_share_summary"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:textColor="@color/muted"
+                android:textSize="12sp" />
+
+            <!-- Settings total switch: every remote command is refused while it is off. -->
+            <TextView
+                android:id="@+id/group_master_off_banner"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:background="@color/green_container"
+                android:padding="10dp"
+                android:text="@string/group_master_off_banner"
+                android:textColor="@color/green_on_container"
+                android:textSize="12sp"
+                android:visibility="gone" />
+
+            <!-- NSD unavailable: explain why no roommate can be discovered. -->
+            <TextView
+                android:id="@+id/group_nsd_banner"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:background="@color/line"
+                android:padding="10dp"
+                android:textColor="@color/ink"
+                android:textSize="12sp"
+                android:visibility="gone" />
 
             <TextView
                 android:id="@+id/group_wiring_warning"
@@ -177,6 +231,25 @@
                 android:text="@string/group_pending_empty"
                 android:textColor="@color/muted"
                 android:textSize="12sp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:text="@string/group_op_log_title"
+                android:textColor="@color/ink"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/group_op_log"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:lineSpacingExtra="3dp"
+                android:textColor="@color/muted"
+                android:textSize="12sp"
+                android:visibility="gone" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/group_leave_button"

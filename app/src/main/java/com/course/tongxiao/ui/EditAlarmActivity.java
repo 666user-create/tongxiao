@@ -73,9 +73,13 @@ public class EditAlarmActivity extends AppCompatActivity {
     private MaterialSwitch vibrateSwitch;
     private MaterialSwitch challengeSwitch;
     private MaterialSwitch advanceWeatherSwitch;
+    private MaterialSwitch shareToGroupSwitch;
 
     /** Guards against double-tapping 保存 before the worker finishes. */
     private boolean saving;
+
+    /** True once the row being edited has been read back and the form is populated. */
+    private boolean loaded;
 
     private com.course.tongxiao.engine.NextTriggerCalculator calculator;
 
@@ -120,6 +124,7 @@ public class EditAlarmActivity extends AppCompatActivity {
         vibrateSwitch = findViewById(R.id.edit_vibrate);
         challengeSwitch = findViewById(R.id.edit_challenge);
         advanceWeatherSwitch = findViewById(R.id.edit_advance_weather);
+        shareToGroupSwitch = findViewById(R.id.edit_share_group);
 
         timeButton.setOnClickListener(v -> openTimePicker());
         repeatGroup.setOnCheckedChangeListener((group, checkedId) -> updateVisibility());
@@ -150,6 +155,7 @@ public class EditAlarmActivity extends AppCompatActivity {
             loadExisting();
         } else {
             repeatGroup.check(R.id.repeat_workday_smart);
+            shareToGroupSwitch.setChecked(true);
         }
         updateTimeLabel();
         updateVisibility();
@@ -240,11 +246,13 @@ public class EditAlarmActivity extends AppCompatActivity {
                 vibrateSwitch.setChecked(loaded.vibrate);
                 skipHolidaysSwitch.setChecked(loaded.skipHolidays);
                 advanceWeatherSwitch.setChecked(loaded.advanceEnabled);
+                shareToGroupSwitch.setChecked(loaded.sharedToGroup);
                 challengeSwitch.setChecked(!TextUtils.isEmpty(loaded.challengeOverrideJson)
                         && ChallengeConfig.fromJson(loaded.challengeOverrideJson).mode
                         != ChallengeConfig.Mode.DIRECT);
                 applyRepeatToUi(loaded);
                 renderSuggestion(suggestion, sampleDays, weatherAdvanceText);
+                this.loaded = true;
             });
         });
     }
@@ -376,6 +384,9 @@ public class EditAlarmActivity extends AppCompatActivity {
         alarm.advanceMaxMin = alarm.advanceEnabled
                 ? (alarm.advanceMaxMin > 0 ? alarm.advanceMaxMin : DEFAULT_ADVANCE_MAX_MIN)
                 : 0;
+        // Dorm sharing is the other half of the mute chain: only shared alarms reach
+        // the roommates' mirror, and only mirrored alarms can be muted remotely.
+        alarm.sharedToGroup = shareToGroupSwitch.isChecked();
         alarm.enabled = true; // saving an alarm implies enabling it
         return alarm;
     }
@@ -383,6 +394,12 @@ public class EditAlarmActivity extends AppCompatActivity {
     private void save() {
         if (saving) {
             return; // double-tap on 保存 must not insert the same alarm twice
+        }
+        if (alarmId > 0 && !loaded) {
+            // The row is still being read back; the form still holds defaults, so
+            // saving now would INSERT a second alarm at 07:30 instead of updating.
+            Toast.makeText(this, R.string.edit_loading_wait, Toast.LENGTH_SHORT).show();
+            return;
         }
         Alarm.RepeatMode mode = readRepeatMode();
         if (mode == Alarm.RepeatMode.CUSTOM && readDayMask() == 0) {
@@ -442,6 +459,24 @@ public class EditAlarmActivity extends AppCompatActivity {
             finish();
             return;
         }
+        // Deleting also wipes the alarm's history (deleteWithEvents), so a mis-tap
+        // next to 保存 would be unrecoverable: confirm first.
+        String name = TextUtils.isEmpty(alarm.label)
+                ? String.format(Locale.CHINA, "%02d:%02d", alarm.hour, alarm.minute)
+                : alarm.label;
+        new MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.edit_delete_confirm_title)
+                .setMessage(getString(R.string.edit_delete_confirm_text, name))
+                .setNegativeButton(R.string.dialog_cancel, null)
+                .setPositiveButton(R.string.edit_delete, (dialog, which) -> deleteAlarm(alarm))
+                .show();
+    }
+
+    /**
+     * Performs the deletion. Package-private so the UI test can exercise the
+     * confirmed path without driving a system dialog.
+     */
+    void deleteAlarm(Alarm alarm) {
         worker.execute(() -> {
             try {
                 scheduler.cancel(alarm);

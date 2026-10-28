@@ -324,6 +324,21 @@
                 android:textColor="@color/muted"
                 android:textSize="12sp" />
 
+            <com.google.android.material.materialswitch.MaterialSwitch
+                android:id="@+id/edit_share_group"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="@string/edit_share_group" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:text="@string/edit_share_group_helper"
+                android:textColor="@color/muted"
+                android:textSize="12sp" />
+
         </LinearLayout>
 
     </ScrollView>

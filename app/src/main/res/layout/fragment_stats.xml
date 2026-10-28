@@ -232,15 +232,6 @@
                     android:layout_marginTop="8dp"
                     android:orientation="vertical" />
 
-                <TextView
-                    android:id="@+id/stats_leaderboard_empty"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:text="@string/stats_leaderboard_hint"
-                    android:textColor="@color/muted"
-                    android:textSize="12sp"
-                    android:visibility="gone" />
 
             </LinearLayout>
 

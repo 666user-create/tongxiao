@@ -57,6 +57,14 @@ public class Alarm {
 
     public boolean enabled = true;
 
-    /** Push into group schedule mirror when members hold bit1 of grantedMask. */
-    public boolean sharedToGroup;
+    /**
+     * Push into the group schedule mirror (SYNC_PUSH) so roommates can see it and
+     * mute it while it rings.
+     *
+     * <p>Defaults to <b>true</b>: sharing is what makes the dorm feature work, and a
+     * fresh alarm invisible to the group would leave the remote-mute entry with
+     * nothing to act on. Turning it off is an explicit per-alarm opt-out in the
+     * editor (design.md §3.1).
+     */
+    public boolean sharedToGroup = true;
 }
