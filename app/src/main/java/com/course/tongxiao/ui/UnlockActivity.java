@@ -125,7 +125,10 @@ public class UnlockActivity extends AppCompatActivity implements SensorEventList
             HolidayResolver resolver = new HolidayResolver(HolidayCalendar.loadFromAssets(this));
             AlarmScheduler scheduler = new AlarmScheduler(this, repository, resolver);
             actions = new RingActions(db, repository, scheduler);
-            engine = ChallengeEngine.fromAssets(getApplicationContext());
+            // Bundled bank + the questions the user wrote themselves (design.md §5.4).
+            engine = ChallengeEngine.fromAssets(getApplicationContext(),
+                    new com.course.tongxiao.engine.challenge.CustomQuestionStore(
+                            getApplicationContext()).load());
 
             Alarm alarm = alarmId > 0 ? db.alarmDao().getById(alarmId) : null;
             ChallengeConfig fromAlarm = alarm == null

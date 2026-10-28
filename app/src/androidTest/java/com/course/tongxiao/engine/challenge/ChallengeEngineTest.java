@@ -199,4 +199,49 @@ public class ChallengeEngineTest {
         }
         assertTrue("out-of-range answer rejected", threw);
     }
+    // ---- custom (user-authored) questions ----
+
+    @Test
+    public void session_usesCustomQuestionsFirst_evenWhenTypesExcludeThem() {
+        List<Question> custom = java.util.Arrays.asList(
+                new Question("我的自定义题一", java.util.Arrays.asList("A", "B", "C", "D"), 2,
+                        Question.Type.GENERAL, 1),
+                new Question("我的自定义题二", java.util.Arrays.asList("A", "B", "C", "D"), 0,
+                        Question.Type.GENERAL, 1));
+        ChallengeEngine withCustom = new ChallengeEngine(
+                java.util.Collections.emptyList(), custom);
+
+        // Only arithmetic is enabled, but the user's own questions must still be asked.
+        ChallengeConfig config = new ChallengeConfig(
+                ChallengeConfig.Mode.QUIZ, 2,
+                EnumSet.of(Question.Type.ARITHMETIC), ChallengeConfig.WrongPolicy.RETRY, 0, 5);
+
+        List<Question> session = withCustom.buildSession(config, 7);
+
+        assertEquals(2, session.size());
+        assertTrue("both questions come from the custom pool",
+                session.get(0).text.startsWith("我的自定义题"));
+        assertTrue(session.get(1).text.startsWith("我的自定义题"));
+        assertEquals(2, withCustom.customSize());
+    }
+
+    @Test
+    public void session_mixesCustomWithBankWhenItNeedsMore() {
+        List<Question> custom = java.util.Collections.singletonList(
+                new Question("只有一道自定义", java.util.Arrays.asList("A", "B", "C", "D"), 1,
+                        Question.Type.GENERAL, 1));
+        ChallengeEngine mixed = new ChallengeEngine(
+                java.util.Collections.singletonList(new Question("内置题",
+                        java.util.Arrays.asList("A", "B", "C", "D"), 0, Question.Type.GENERAL, 1)),
+                custom);
+
+        ChallengeConfig config = new ChallengeConfig(
+                ChallengeConfig.Mode.QUIZ, 2,
+                EnumSet.of(Question.Type.GENERAL), ChallengeConfig.WrongPolicy.RETRY, 0, 5);
+        List<Question> session = mixed.buildSession(config, 3);
+
+        assertEquals(2, session.size());
+        assertEquals("custom first", "只有一道自定义", session.get(0).text);
+        assertFalse("the rest comes from the bank", session.get(1).text.isEmpty());
+    }
 }

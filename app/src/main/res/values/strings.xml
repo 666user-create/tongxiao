@@ -98,6 +98,31 @@
     <string name="settings_group_master">允许互助组</string>
     <string name="settings_group_master_helper">关闭后不再接受任何组员的静音/代设指令（不会清除已授权项）</string>
 
+    <!-- Custom challenge questions (design.md §5.4) -->
+    <string name="settings_custom_questions">自定义题目（停铃挑战）</string>
+    <string name="settings_custom_questions_summary">%1$d 道题 · 点进去新增或删除</string>
+    <string name="settings_custom_questions_none">还没有自定义题目</string>
+    <string name="custom_questions_title">自定义题目</string>
+    <string name="custom_questions_helper">自己出的题会优先出现在停铃挑战里；题干和选项都必填，标出正确项</string>
+    <string name="custom_questions_empty">还没有自定义题目\n点下方按钮自己出一题（比如你正在背的公式）</string>
+    <string name="custom_questions_add">新增题目</string>
+    <string name="custom_questions_delete">删除</string>
+    <string name="custom_questions_delete_confirm">「%1$s」将被删除</string>
+    <string name="custom_questions_saved">已保存，停铃时会优先考你</string>
+    <string name="custom_questions_invalid">题干和 4 个选项都要填，长度别超限</string>
+    <string name="custom_questions_full">最多 50 道题，先删几道再加</string>
+    <string name="custom_question_text_hint">题干</string>
+    <string name="custom_question_options_title">四个选项</string>
+    <string name="custom_question_option_1">选项 A</string>
+    <string name="custom_question_option_2">选项 B</string>
+    <string name="custom_question_option_3">选项 C</string>
+    <string name="custom_question_option_4">选项 D</string>
+    <string name="custom_question_option_a">A</string>
+    <string name="custom_question_option_b">B</string>
+    <string name="custom_question_option_c">C</string>
+    <string name="custom_question_option_d">D</string>
+    <string name="custom_question_correct">哪个是正确答案</string>
+    <string name="custom_question_answer_line">正确答案：%1$s. %2$s</string>
     <!-- Step 4.2/4.3 challenge -->
     <string name="unlock_progress">第 %1$d / %2$d 题 · 答对才能停铃</string>
     <string name="unlock_emergency">长按 · 紧急停止（不计入起床统计）</string>

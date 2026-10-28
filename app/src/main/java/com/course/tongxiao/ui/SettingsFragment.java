@@ -46,6 +46,7 @@ public class SettingsFragment extends Fragment {
     private MaterialButton regionPick;
     private MaterialButton regionClear;
     private MaterialSwitch masterSwitch;
+    private TextView customQuestionsSummary;
 
     /** Parsed once per screen; parsing ~200 KB of JSON is not free. */
     private RegionCatalog catalog;
@@ -78,12 +79,17 @@ public class SettingsFragment extends Fragment {
         regionPick = view.findViewById(R.id.settings_region_pick);
         regionClear = view.findViewById(R.id.settings_region_clear);
         masterSwitch = view.findViewById(R.id.settings_group_master);
+        customQuestionsSummary = view.findViewById(R.id.settings_custom_questions_summary);
+        view.findViewById(R.id.settings_custom_questions).setOnClickListener(v ->
+                startActivity(new android.content.Intent(requireContext(),
+                        CustomQuestionActivity.class)));
 
         masterSwitch.setChecked(settings.isGroupMasterSwitchOn());
         masterSwitch.setOnCheckedChangeListener((button, checked) -> submit(
                 () -> settings.setGroupMasterSwitchOn(checked)));
 
         renderRegion();
+        renderCustomQuestionsSummary();
         // Until the catalog is parsed the picker cannot open; say "loading", not
         // "unavailable" (the old copy accused the data of being broken).
         regionPick.setEnabled(false);
@@ -150,6 +156,24 @@ public class SettingsFragment extends Fragment {
     private void toastText(String message) {
         android.widget.Toast.makeText(requireContext(), message,
                 android.widget.Toast.LENGTH_SHORT).show();
+    }
+
+    /** Shows how many of the user's own questions the challenge will draw from. */
+    private void renderCustomQuestionsSummary() {
+        if (customQuestionsSummary == null || !isAdded()) {
+            return;
+        }
+        int count = new com.course.tongxiao.engine.challenge.CustomQuestionStore(requireContext())
+                .size();
+        customQuestionsSummary.setText(count == 0
+                ? getString(R.string.settings_custom_questions_none)
+                : getString(R.string.settings_custom_questions_summary, count));
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        renderCustomQuestionsSummary(); // the editor may have added/removed rows
     }
 
     private void applyCatalogState() {

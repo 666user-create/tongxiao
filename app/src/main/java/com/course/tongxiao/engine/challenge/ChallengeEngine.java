@@ -36,18 +36,42 @@ public class ChallengeEngine {
     private static final String BANK_ASSET = "quiz-bank.json";
 
     private final List<Question> bank;
+    /** User-authored questions (design.md §5.4): always eligible, see buildSession. */
+    private final List<Question> custom;
 
     public ChallengeEngine(@NonNull List<Question> bank) {
+        this(bank, java.util.Collections.emptyList());
+    }
+
+    public ChallengeEngine(@NonNull List<Question> bank, @NonNull List<Question> custom) {
         this.bank = new ArrayList<>(bank);
+        this.custom = new ArrayList<>(custom);
     }
 
     public static ChallengeEngine fromAssets(Context appContext) {
         return new ChallengeEngine(loadBank(appContext.getAssets()));
     }
 
+    /**
+     * Engine with the bundled bank plus the user's own questions.
+     *
+     * <p>Custom questions are kept in a separate pool because the type filter must not
+     * hide them: a user who typed their own question expects to see it, even when only
+     * "算术" is enabled in the challenge settings.
+     */
+    public static ChallengeEngine fromAssets(Context appContext,
+                                             @NonNull List<Question> customQuestions) {
+        return new ChallengeEngine(loadBank(appContext.getAssets()), customQuestions);
+    }
+
     /** @return the number of bank questions loaded (0 = only generated arithmetic). */
     public int bankSize() {
         return bank.size();
+    }
+
+    /** @return how many user-authored questions this engine will use. */
+    public int customSize() {
+        return custom.size();
     }
 
     /**
@@ -59,6 +83,12 @@ public class ChallengeEngine {
     public List<Question> buildSession(@NonNull ChallengeConfig config, long seed) {
         ChallengeConfig safe = config.clamped();
         Random random = new Random(seed);
+
+        // Custom questions first (shuffled), so a user who wrote their own questions
+        // actually meets them at 6 a.m. instead of rarely drawing them from a big pool.
+        List<Question> customPool = new ArrayList<>(custom);
+        Collections.shuffle(customPool, random);
+
         List<Question> pool = new ArrayList<>();
         for (Question q : bank) {
             if (safe.types.contains(q.type)) {
@@ -68,7 +98,12 @@ public class ChallengeEngine {
         Collections.shuffle(pool, random);
 
         List<Question> session = new ArrayList<>();
+        int customUsed = 0;
         for (int i = 0; i < safe.questionCount; i++) {
+            if (customUsed < customPool.size()) {
+                session.add(customPool.get(customUsed++));
+                continue;
+            }
             boolean useGenerated = safe.types.contains(Question.Type.ARITHMETIC)
                     && (pool.isEmpty() || (i % 2 == 0 && safe.types.size() == 1));
             if (!useGenerated && i < pool.size()) {

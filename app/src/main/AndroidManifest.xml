@@ -52,6 +52,11 @@
             android:windowSoftInputMode="adjustResize" />
 
         <activity
+            android:name=".ui.CustomQuestionActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+
+        <activity
             android:name=".ui.UnlockActivity"
             android:excludeFromRecents="true"
             android:screenOrientation="portrait"
