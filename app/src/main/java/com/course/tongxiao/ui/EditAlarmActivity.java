@@ -75,6 +75,11 @@ public class EditAlarmActivity extends AppCompatActivity {
     private TextView snoozeValue;
     private MaterialSwitch vibrateSwitch;
     private MaterialButtonToggleGroup challengeModeGroup;
+    private TextView questionSourceLabel;
+    private MaterialButtonToggleGroup questionSourceGroup;
+    private MaterialButton mineButton;
+    private TextView questionSourceHint;
+    private com.course.tongxiao.engine.challenge.CustomQuestionStore customQuestionStore;
     private MaterialSwitch advanceWeatherSwitch;
     private MaterialSwitch shareToGroupSwitch;
 
@@ -130,6 +135,18 @@ public class EditAlarmActivity extends AppCompatActivity {
         renderSnoozeValue();
         vibrateSwitch = findViewById(R.id.edit_vibrate);
         challengeModeGroup = findViewById(R.id.edit_challenge_mode);
+        questionSourceLabel = findViewById(R.id.edit_question_source_label);
+        questionSourceGroup = findViewById(R.id.edit_question_source);
+        mineButton = findViewById(R.id.question_source_mine);
+        questionSourceHint = findViewById(R.id.edit_question_source_hint);
+        customQuestionStore = new com.course.tongxiao.engine.challenge.CustomQuestionStore(
+                getApplicationContext());
+        challengeModeGroup.addOnButtonCheckedListener((group, checkedId, isChecked) -> {
+            if (isChecked) {
+                updateQuestionSourceVisibility();
+            }
+        });
+        questionSourceGroup.check(R.id.question_source_builtin);
         advanceWeatherSwitch = findViewById(R.id.edit_advance_weather);
         shareToGroupSwitch = findViewById(R.id.edit_share_group);
 
@@ -265,7 +282,7 @@ public class EditAlarmActivity extends AppCompatActivity {
                 skipHolidaysSwitch.setChecked(loaded.skipHolidays);
                 advanceWeatherSwitch.setChecked(loaded.advanceEnabled);
                 shareToGroupSwitch.setChecked(loaded.sharedToGroup);
-                checkChallengeMode(ChallengeConfig.fromJson(loaded.challengeOverrideJson).mode);
+                checkChallengeMode(ChallengeConfig.fromJson(loaded.challengeOverrideJson));
                 applyRepeatToUi(loaded);
                 renderSuggestion(suggestion, sampleDays, weatherAdvanceText);
                 this.loaded = true;
@@ -379,10 +396,10 @@ public class EditAlarmActivity extends AppCompatActivity {
         return Alarm.RepeatMode.WORKDAY_SMART;
     }
 
-    /** Reflects a stored challenge mode on the three-way selector. */
-    private void checkChallengeMode(@NonNull ChallengeConfig.Mode mode) {
+    /** Reflects a stored challenge config on the mode + question-source selectors. */
+    private void checkChallengeMode(@NonNull ChallengeConfig config) {
         int id;
-        switch (mode) {
+        switch (config.mode) {
             case QUIZ:
                 id = R.id.challenge_mode_quiz;
                 break;
@@ -395,6 +412,28 @@ public class EditAlarmActivity extends AppCompatActivity {
                 break;
         }
         challengeModeGroup.check(id);
+        updateQuestionSourceVisibility();
+        questionSourceGroup.check(config.questionSource
+                == ChallengeConfig.QuestionSource.MY_OWN
+                ? R.id.question_source_mine : R.id.question_source_builtin);
+    }
+
+    /**
+     * The 内置题库 / 我的题目 choice only means something for the multiple-choice mode;
+     * it is hidden for 关闭 and 摇一摇 so the form never asks an irrelevant question.
+     */
+    private void updateQuestionSourceVisibility() {
+        boolean quiz = challengeModeGroup.getCheckedButtonId() == R.id.challenge_mode_quiz;
+        questionSourceLabel.setVisibility(quiz ? View.VISIBLE : View.GONE);
+        questionSourceGroup.setVisibility(quiz ? View.VISIBLE : View.GONE);
+        questionSourceHint.setVisibility(quiz ? View.VISIBLE : View.GONE);
+        if (quiz) {
+            int customCount = customQuestionStore.size();
+            mineButton.setEnabled(customCount > 0);
+            questionSourceHint.setText(customCount > 0
+                    ? getString(R.string.edit_question_source_hint, customCount)
+                    : getString(R.string.edit_question_source_none));
+        }
     }
 
     /**
@@ -405,7 +444,11 @@ public class EditAlarmActivity extends AppCompatActivity {
     private String selectedChallengeJson() {
         int checked = challengeModeGroup.getCheckedButtonId();
         if (checked == R.id.challenge_mode_quiz) {
-            return ChallengeConfig.quizDefault().toJson();
+            ChallengeConfig config = ChallengeConfig.quizDefault();
+            if (questionSourceGroup.getCheckedButtonId() == R.id.question_source_mine) {
+                config = config.withQuestionSource(ChallengeConfig.QuestionSource.MY_OWN);
+            }
+            return config.toJson();
         }
         if (checked == R.id.challenge_mode_shake) {
             return ChallengeConfig.shakeDefault().toJson();

@@ -1,13 +1,13 @@
 # 同晓 · 测试报告
 
 > 生成方式：本文件由用户在模拟器 `Pixel_7_API_36` 上实跑的 `gradlew connectedDebugAndroidTest` 结果与各里程碑关卡记录汇总。
-> 状态：**已完成**（最终全量运行：360 tests / 0 failed / 0 skipped，模拟器 Pixel_7_API_36）
+> 状态：**已完成**（最终全量运行：364 tests / 0 failed / 0 skipped，模拟器 Pixel_7_API_36）
 
 ## 1. 结论速览
 
 | 项目 | 结果 |
 |---|---|
-| 单元/集成测试（instrumentation） | **360 tests / 0 failed / 0 errors / 0 skipped** |
+| 单元/集成测试（instrumentation） | **364 tests / 0 failed / 0 errors / 0 skipped** |
 | 构建（G1，含 lint） | `BUILD SUCCESSFUL`，lint **0 error**，仅余 2 条已知提示 |
 | 手动验证（G5） | 保存落库、滚轮时间选择、响铃全链路、Provider 只读、双机互助（见 §4） |
 
@@ -173,7 +173,7 @@ Lead 随后按报告拍板的两项设计决策 + 三项打磨：
 | 项 | 结果 |
 |---|---|
 | `gradlew build`（含 release 变体与 lint） | BUILD SUCCESSFUL；lint **0 error / 0 warning** |
-| `connectedDebugAndroidTest`（先 `pm clear`） | **360 tests / 0 failed / 0 errors / 0 skipped** |
+| `connectedDebugAndroidTest`（先 `pm clear`） | **364 tests / 0 failed / 0 errors / 0 skipped** |
 | 冷启动 / 四 tab | 正常（闹钟 / 互助 / 统计 / 设置），无重复 Fragment |
 | 新建闹钟 → 保存 → 系统注册 | `dumpsys alarm` 显示 `RTC_WAKEUP` + `exactAllowReason=policy_permission` + `showIntent=startActivity`（全屏页链路已排程） |
 | 关闭闹钟 | "下次"行消失，`dumpsys alarm` 活动注册 **2 → 0** |
@@ -198,11 +198,11 @@ Lead 随后按报告拍板的两项设计决策 + 三项打磨：
 | 层 | 实现 |
 |---|---|
 | 存储 | `CustomQuestionStore`：SharedPreferences 存 JSON 数组，最多 **50 题**；题干 ≤120 字、4 个选项各 ≤24 字、正确项 0..3；**写入严格校验、读取宽松跳过**（坏行只丢该行，不影响停铃） |
-| 引擎 | `ChallengeEngine(bank, custom)`：自定义题**独立成池、优先出题**——即使用户在挑战设置里只勾了"算术"，自出的题也一定会出现（否则用户写了却永远考不到） |
+| 引擎 | `ChallengeEngine(bank, custom)` + `ChallengeConfig.questionSource`：**按闹钟选"内置题库 / 我的题目"**；选"我的题目"时只用自出的题，若一道都没出过则自动回落到内置题库（不能出现答不出的挑战）；BUILT_IN 时完全不用自出题 |
 | 界面 | `CustomQuestionActivity`：列表（序号 + 题干 + 正确答案 + 删除）、新增对话框（题干 + 4 选项 + A/B/C/D 单选）、删除二次确认、空态引导、满 50 题提示；入口在**设置 → 自定义题目（停铃挑战）**，摘要显示"N 道题 / 还没有自定义题目" |
 | 测试 | `CustomQuestionStoreTest`(13)：往返、空题干/空选项/越界答案/选项数不对/超长全部拒绝、最多 50、按索引删除、坏 JSON 与坏行降级、清空；`ChallengeEngineTest`(+2)：自定义题在类型过滤下仍优先出现、不足时与内置题库混用；`CustomQuestionActivityTest`(5)：空态、保存后渲染、非法输入拒绝、删除、对话框字段与默认答案 |
 
-设备实测：设置页进入 → 空态 → 新增（题干"2+2=?"、选项 3/4/5/6、正确 B）→ 列表出现"1. …/ 正确答案：B. 4" → 删除并二次确认 → 回到空态；`logcat -b crash` 为空。
+设备实测：编辑页选「选择题」→ 出现「题目来源：内置题库 / 我的题目」（无自出题时"我的题目"禁用并提示去设置）；设置页进入 → 空态 → 新增（题干"2+2=?"、选项 3/4/5/6、正确 B）→ 列表出现"1. …/ 正确答案：B. 4" → 删除并二次确认 → 回到空态；`logcat -b crash` 为空。
 ## 6. 已知未覆盖项
 
 - 真实跨设备 NSD 发现（模拟器只覆盖了 127.0.0.1 回环；真机需同热点）

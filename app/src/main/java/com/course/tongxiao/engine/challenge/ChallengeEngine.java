@@ -77,6 +77,11 @@ public class ChallengeEngine {
     /**
      * Builds exactly {@code config.questionCount} questions.
      *
+     * <p>The pool follows {@link ChallengeConfig#questionSource}: with {@code MY_OWN}
+     * the user's own questions are used exclusively (falling back to the bundled bank
+     * only when they have not written any — a challenge must never become
+     * unanswerable), and with {@code BUILT_IN} they are ignored entirely.
+     *
      * @param seed deterministic source (tests pass a fixed value)
      */
     @NonNull
@@ -84,10 +89,13 @@ public class ChallengeEngine {
         ChallengeConfig safe = config.clamped();
         Random random = new Random(seed);
 
-        // Custom questions first (shuffled), so a user who wrote their own questions
-        // actually meets them at 6 a.m. instead of rarely drawing them from a big pool.
-        List<Question> customPool = new ArrayList<>(custom);
-        Collections.shuffle(customPool, random);
+        // Own questions are shuffled but lead the session, so a user who wrote their
+        // own questions actually meets them at 6 a.m.
+        List<Question> customPool = new ArrayList<>();
+        if (safe.questionSource == ChallengeConfig.QuestionSource.MY_OWN) {
+            customPool.addAll(custom);
+            Collections.shuffle(customPool, random);
+        }
 
         List<Question> pool = new ArrayList<>();
         for (Question q : bank) {

@@ -39,6 +39,14 @@ public class ChallengeConfig {
         ESCALATE
     }
 
+    /** Where the questions come from (per-alarm choice, design.md §5.4). */
+    public enum QuestionSource {
+        /** Bundled bank + generated arithmetic. */
+        BUILT_IN,
+        /** The questions the user wrote themselves (settings → 自定义题目). */
+        MY_OWN
+    }
+
     public static final int MIN_QUESTIONS = 1;
     public static final int MAX_QUESTIONS = 5;
     public static final int MAX_DELAY_SECONDS = 30;
@@ -50,11 +58,21 @@ public class ChallengeConfig {
     public final int delaySeconds;
     /** Shake count for SHAKE mode (fixed bound, not user visible in v1). */
     public final int shakeCount;
+    /** Which question pool this alarm draws from; defaults to the bundled bank. */
+    public final QuestionSource questionSource;
 
     public ChallengeConfig(@NonNull Mode mode, int questionCount,
                            @NonNull Set<Question.Type> types,
                            @NonNull WrongPolicy wrongPolicy, int delaySeconds,
                            int shakeCount) {
+        this(mode, questionCount, types, wrongPolicy, delaySeconds, shakeCount,
+                QuestionSource.BUILT_IN);
+    }
+
+    public ChallengeConfig(@NonNull Mode mode, int questionCount,
+                           @NonNull Set<Question.Type> types,
+                           @NonNull WrongPolicy wrongPolicy, int delaySeconds,
+                           int shakeCount, @NonNull QuestionSource questionSource) {
         this.mode = mode;
         this.questionCount = questionCount;
         this.types = EnumSet.copyOf(types.isEmpty()
@@ -62,6 +80,14 @@ public class ChallengeConfig {
         this.wrongPolicy = wrongPolicy;
         this.delaySeconds = delaySeconds;
         this.shakeCount = shakeCount;
+        this.questionSource = questionSource;
+    }
+
+    /** @return a copy with a different question source (mode/limits preserved). */
+    @NonNull
+    public ChallengeConfig withQuestionSource(@NonNull QuestionSource source) {
+        return new ChallengeConfig(mode, questionCount, types, wrongPolicy, delaySeconds,
+                shakeCount, source);
     }
 
     /** Config produced by the edit-screen 摇一摇 option (5 shakes). */
@@ -102,7 +128,8 @@ public class ChallengeConfig {
         int shakes = Math.max(3, Math.min(10, shakeCount));
         Set<Question.Type> safeTypes = types.isEmpty()
                 ? EnumSet.of(Question.Type.ARITHMETIC) : EnumSet.copyOf(types);
-        return new ChallengeConfig(mode, count, safeTypes, wrongPolicy, delay, shakes);
+        return new ChallengeConfig(mode, count, safeTypes, wrongPolicy, delay, shakes,
+                questionSource);
     }
 
     // ---- JSON ----
@@ -121,6 +148,7 @@ public class ChallengeConfig {
             root.put("wrongPolicy", wrongPolicy.name());
             root.put("delaySeconds", delaySeconds);
             root.put("shakeCount", shakeCount);
+            root.put("questionSource", questionSource.name());
             return root.toString();
         } catch (Exception e) {
             return "{}";
@@ -142,6 +170,8 @@ public class ChallengeConfig {
             int count = root.optInt("questionCount", fallback.questionCount);
             int delay = root.optInt("delaySeconds", fallback.delaySeconds);
             int shakes = root.optInt("shakeCount", fallback.shakeCount);
+            QuestionSource source = parseEnum(QuestionSource.class,
+                    root.optString("questionSource"), fallback.questionSource);
 
             Set<Question.Type> types = EnumSet.noneOf(Question.Type.class);
             JSONArray array = root.optJSONArray("types");
@@ -154,7 +184,8 @@ public class ChallengeConfig {
                     }
                 }
             }
-            return new ChallengeConfig(mode, count, types, policy, delay, shakes).clamped();
+            return new ChallengeConfig(mode, count, types, policy, delay, shakes, source)
+                    .clamped();
         } catch (Exception e) {
             return fallback;
         }

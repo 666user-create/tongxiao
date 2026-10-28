@@ -29,6 +29,11 @@
     <string name="edit_challenge_off">关闭</string>
     <string name="edit_challenge_quiz">选择题</string>
     <string name="edit_challenge_shake">摇一摇</string>
+    <string name="edit_question_source_label">题目来源</string>
+    <string name="edit_question_source_builtin">内置题库</string>
+    <string name="edit_question_source_mine">我的题目</string>
+    <string name="edit_question_source_hint">你已出好 %1$d 道题，会在设置 → 自定义题目 里管理</string>
+    <string name="edit_question_source_none">还没有自定义题目：先到 设置 → 自定义题目 出题</string>
     <string name="edit_advance_weather">天气不佳时提前响</string>
     <string name="edit_advance_weather_helper">需先在设置里选择地区；雨雪或 0℃ 以下时最多提前 20 分钟</string>
     <string name="edit_share_group">共享到互助组</string>

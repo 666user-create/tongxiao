@@ -2,6 +2,7 @@ package com.course.tongxiao.engine.challenge;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
@@ -216,7 +217,8 @@ public class ChallengeEngineTest {
                 ChallengeConfig.Mode.QUIZ, 2,
                 EnumSet.of(Question.Type.ARITHMETIC), ChallengeConfig.WrongPolicy.RETRY, 0, 5);
 
-        List<Question> session = withCustom.buildSession(config, 7);
+        List<Question> session = withCustom.buildSession(
+                config.withQuestionSource(ChallengeConfig.QuestionSource.MY_OWN), 7);
 
         assertEquals(2, session.size());
         assertTrue("both questions come from the custom pool",
@@ -238,10 +240,60 @@ public class ChallengeEngineTest {
         ChallengeConfig config = new ChallengeConfig(
                 ChallengeConfig.Mode.QUIZ, 2,
                 EnumSet.of(Question.Type.GENERAL), ChallengeConfig.WrongPolicy.RETRY, 0, 5);
-        List<Question> session = mixed.buildSession(config, 3);
+        List<Question> session = mixed.buildSession(
+                config.withQuestionSource(ChallengeConfig.QuestionSource.MY_OWN), 3);
 
         assertEquals(2, session.size());
         assertEquals("custom first", "只有一道自定义", session.get(0).text);
         assertFalse("the rest comes from the bank", session.get(1).text.isEmpty());
+    }
+
+    @Test
+    public void builtInSource_neverUsesTheUsersOwnQuestions() {
+        ChallengeEngine engine = new ChallengeEngine(
+                java.util.Collections.singletonList(new Question("内置题",
+                        java.util.Arrays.asList("A", "B", "C", "D"), 0, Question.Type.GENERAL, 1)),
+                java.util.Collections.singletonList(new Question("我的题",
+                        java.util.Arrays.asList("A", "B", "C", "D"), 0, Question.Type.GENERAL, 1)));
+        ChallengeConfig config = new ChallengeConfig(
+                ChallengeConfig.Mode.QUIZ, 1,
+                EnumSet.of(Question.Type.GENERAL), ChallengeConfig.WrongPolicy.RETRY, 0, 5)
+                .withQuestionSource(ChallengeConfig.QuestionSource.BUILT_IN);
+
+        for (long seed = 0; seed < 20; seed++) {
+            List<Question> session = engine.buildSession(config, seed);
+            assertNotEquals("BUILT_IN must not draw from the own pool", "我的题", session.get(0).text);
+        }
+    }
+
+    @Test
+    public void myOwnSource_withNoQuestions_fallsBackToBuiltIn() {
+        ChallengeEngine engine = new ChallengeEngine(
+                java.util.Collections.singletonList(new Question("内置题",
+                        java.util.Arrays.asList("A", "B", "C", "D"), 0, Question.Type.GENERAL, 1)),
+                java.util.Collections.emptyList());
+        ChallengeConfig config = new ChallengeConfig(
+                ChallengeConfig.Mode.QUIZ, 1,
+                EnumSet.of(Question.Type.GENERAL), ChallengeConfig.WrongPolicy.RETRY, 0, 5)
+                .withQuestionSource(ChallengeConfig.QuestionSource.MY_OWN);
+
+        List<Question> session = engine.buildSession(config, 1);
+        assertEquals("never unanswerable", 1, session.size());
+        assertEquals("内置题", session.get(0).text);
+    }
+
+    @Test
+    public void questionSource_roundTripsThroughJsonAndSurvivesClamping() {
+        ChallengeConfig mine = ChallengeConfig.quizDefault()
+                .withQuestionSource(ChallengeConfig.QuestionSource.MY_OWN);
+        ChallengeConfig parsed = ChallengeConfig.fromJson(mine.toJson());
+        assertEquals(ChallengeConfig.QuestionSource.MY_OWN, parsed.questionSource);
+        assertEquals(ChallengeConfig.QuestionSource.MY_OWN, parsed.clamped().questionSource);
+
+        // Absent / unknown values fall back to the bundled bank, never to "my own".
+        assertEquals(ChallengeConfig.QuestionSource.BUILT_IN,
+                ChallengeConfig.fromJson("{\"mode\":\"QUIZ\"}").questionSource);
+        assertEquals(ChallengeConfig.QuestionSource.BUILT_IN,
+                ChallengeConfig.fromJson("{\"questionSource\":\"ALIEN\"}").questionSource);
     }
 }

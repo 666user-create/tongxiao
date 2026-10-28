@@ -29,7 +29,7 @@
 | 响铃链路 | `alarm/AlarmReceiver` → `alarm/RingService` → `alarm/StopRingActivity` | 前台服务播铃+振动+WakeLock；锁屏全屏页；通知常驻"停止" |
 | 响后状态机 | `alarm/RingActions` | 停铃重排下一次、ONCE 自关闭、贪睡钳制 1–30 分、跳过重排 |
 | 系统事件恢复 | `alarm/SystemEventReceiver` | 开机 / 改时间 / 时区 / 应用更新 → 全量重排 |
-| 停铃挑战 | `engine/challenge/*`、`ui/UnlockActivity` | 离线算术题 + 30 题题库 + **自定义题目（自己出题，最多 50 道，优先出题）**；配置接收端硬钳制 |
+| 停铃挑战 | `engine/challenge/*`、`ui/UnlockActivity` | 离线算术题 + 30 题题库 + **自定义题目（自己出题，最多 50 道；每个闹钟可选"内置题库 / 我的题目"）**；配置接收端硬钳制 |
 | 组内互助 | `group/*` | NSD 发现 + TCP 长连接 + 换行 JSON 协议；权限位校验；待确认请求 |
 | 行为自适应 | `engine/adaptive/*` | 中位数统计 → 建议卡片 |
 | 天气联动 | `engine/weather/*` | Open-Meteo + Room 缓存 + 过期不提前 |

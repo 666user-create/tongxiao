@@ -221,4 +221,50 @@ public class EditAlarmActivityTest {
                             .fromJson(stored.challengeOverrideJson).mode);
         }
     }
+    /**
+     * Per-alarm question source: picking 我的题目 must persist MY_OWN in the alarm's
+     * challenge JSON (and stay BUILT_IN for the default).
+     */
+    @Test
+    public void choosingMyOwnQuestions_persistsTheQuestionSource() throws Exception {
+        com.course.tongxiao.engine.challenge.CustomQuestionStore store =
+                new com.course.tongxiao.engine.challenge.CustomQuestionStore(ctx);
+        store.clear();
+        store.add("自出题", java.util.Arrays.asList("A", "B", "C", "D"), 1);
+
+        try (ActivityScenario<EditAlarmActivity> scenario =
+                     ActivityScenario.launch(EditAlarmActivity.class)) {
+            Thread.sleep(800);
+            scenario.onActivity(activity -> {
+                ((EditText) activity.findViewById(R.id.edit_label)).setText("自出题闹钟");
+                activity.findViewById(R.id.challenge_mode_quiz).performClick();
+            });
+            Thread.sleep(300);
+            scenario.onActivity(activity ->
+                    activity.findViewById(R.id.question_source_mine).performClick());
+
+            saveViaButton(scenario);
+            Thread.sleep(1500);
+
+            Alarm stored = null;
+            for (Alarm alarm : db.alarmDao().getAll()) {
+                if ("自出题闹钟".equals(alarm.label)) {
+                    stored = alarm;
+                }
+            }
+            assertNotNull("alarm persisted", stored);
+            created.add(stored.id);
+            assertNotNull("challenge config written", stored.challengeOverrideJson);
+            com.course.tongxiao.engine.challenge.ChallengeConfig config =
+                    com.course.tongxiao.engine.challenge.ChallengeConfig
+                            .fromJson(stored.challengeOverrideJson);
+            assertEquals(com.course.tongxiao.engine.challenge.ChallengeConfig.Mode.QUIZ,
+                    config.mode);
+            assertEquals("per-alarm opt-in to own questions",
+                    com.course.tongxiao.engine.challenge.ChallengeConfig.QuestionSource.MY_OWN,
+                    config.questionSource);
+        } finally {
+            store.clear();
+        }
+    }
 }

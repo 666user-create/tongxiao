@@ -365,6 +365,53 @@
                 android:text="@string/edit_challenge_helper"
                 android:textColor="@color/muted"
                 android:textSize="12sp" />
+            <TextView
+                android:id="@+id/edit_question_source_label"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:text="@string/edit_question_source_label"
+                android:textColor="@color/ink"
+                android:textSize="14sp"
+                android:visibility="gone" />
+
+            <com.google.android.material.button.MaterialButtonToggleGroup
+                android:id="@+id/edit_question_source"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:visibility="gone"
+                app:selectionRequired="true"
+                app:singleSelection="true">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/question_source_builtin"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="44dp"
+                    android:insetLeft="2dp"
+                    android:insetRight="2dp"
+                    android:text="@string/edit_question_source_builtin" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/question_source_mine"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="44dp"
+                    android:insetLeft="2dp"
+                    android:insetRight="2dp"
+                    android:text="@string/edit_question_source_mine" />
+
+            </com.google.android.material.button.MaterialButtonToggleGroup>
+
+            <TextView
+                android:id="@+id/edit_question_source_hint"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:textColor="@color/muted"
+                android:textSize="12sp"
+                android:visibility="gone" />
 
             <com.google.android.material.materialswitch.MaterialSwitch
                 android:id="@+id/edit_advance_weather"
