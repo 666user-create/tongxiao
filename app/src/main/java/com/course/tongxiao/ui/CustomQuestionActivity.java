@@ -6,10 +6,11 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.EditText;
 import android.widget.LinearLayout;
-import android.widget.RadioGroup;
+import android.widget.RadioButton;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -116,19 +117,27 @@ public class CustomQuestionActivity extends AppCompatActivity {
         EditText option2 = content.findViewById(R.id.custom_option_2);
         EditText option3 = content.findViewById(R.id.custom_option_3);
         EditText option4 = content.findViewById(R.id.custom_option_4);
-        RadioGroup correct = content.findViewById(R.id.custom_correct_group);
 
-        new MaterialAlertDialogBuilder(this)
+        // The four "correct answer" radios sit on the option rows (no RadioGroup, so
+        // exclusivity is wired here); this keeps the marker reachable while typing.
+        RadioButton[] correctRadios = {
+                content.findViewById(R.id.custom_correct_1),
+                content.findViewById(R.id.custom_correct_2),
+                content.findViewById(R.id.custom_correct_3),
+                content.findViewById(R.id.custom_correct_4)};
+        wireCorrectRadios(correctRadios);
+
+        androidx.appcompat.app.AlertDialog dialog = new MaterialAlertDialogBuilder(this)
                 .setTitle(R.string.custom_questions_add)
                 .setView(content)
                 .setNegativeButton(R.string.dialog_cancel, null)
-                .setPositiveButton(R.string.dialog_ok, (dialog, which) -> {
+                .setPositiveButton(R.string.dialog_ok, (dialogInterface, which) -> {
                     List<String> options = new ArrayList<>();
                     options.add(valueOf(option1));
                     options.add(valueOf(option2));
                     options.add(valueOf(option3));
                     options.add(valueOf(option4));
-                    int correctIndex = indexOf(correct.getCheckedRadioButtonId());
+                    int correctIndex = checkedIndexOf(correctRadios);
                     if (!store.add(valueOf(text), options, correctIndex)) {
                         // One message for every rejection reason keeps it honest: the
                         // store is the single validator, the UI does not re-implement it.
@@ -138,7 +147,14 @@ public class CustomQuestionActivity extends AppCompatActivity {
                     toast(R.string.custom_questions_saved);
                     render();
                 })
-                .show();
+                .create();
+        // Five text fields open a keyboard that would otherwise cover 确定/取消: let the
+        // dialog resize around the IME so the buttons stay reachable while typing.
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setSoftInputMode(
+                    android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
+        }
+        dialog.show();
     }
 
     private void confirmDelete(int index, String text) {
@@ -157,17 +173,30 @@ public class CustomQuestionActivity extends AppCompatActivity {
         return field.getText() == null ? "" : field.getText().toString().trim();
     }
 
-    private static int indexOf(int radioId) {
-        if (radioId == R.id.custom_correct_2) {
-            return 1;
+    /**
+     * Makes the four inline answer radios mutually exclusive.
+     *
+     * <p>Package-private on purpose: the layout is inflated directly by tests, and the
+     * exclusivity must be the same code path in production and in tests (a RadioGroup
+     * cannot be used because each radio sits inside its own option row).
+     */
+    static void wireCorrectRadios(@NonNull RadioButton[] radios) {
+        for (int i = 0; i < radios.length; i++) {
+            final int position = i;
+            radios[i].setOnClickListener(v -> {
+                for (int j = 0; j < radios.length; j++) {
+                    radios[j].setChecked(j == position);
+                }
+            });
         }
-        if (radioId == R.id.custom_correct_3) {
-            return 2;
+    }
+
+    private static int checkedIndexOf(RadioButton[] radios) {        for (int i = 0; i < radios.length; i++) {
+            if (radios[i] != null && radios[i].isChecked()) {
+                return i;
+            }
         }
-        if (radioId == R.id.custom_correct_4) {
-            return 3;
-        }
-        return 0;
+        return 0; // "A" stays the default when nothing was tapped
     }
 
     private void toast(int messageRes) {

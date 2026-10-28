@@ -33,110 +33,129 @@
             android:textColor="@color/muted"
             android:textSize="12sp" />
 
-        <com.google.android.material.textfield.TextInputLayout
+        <!-- The "which one is correct" dot sits on each option row: keeping it next to
+             the field means the answer can be marked while typing, instead of scrolling
+             to a separate section that the keyboard covers. -->
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="6dp">
-
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/custom_option_1"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:hint="@string/custom_question_option_1"
-                android:inputType="text"
-                android:maxLength="24" />
-
-        </com.google.android.material.textfield.TextInputLayout>
-
-        <com.google.android.material.textfield.TextInputLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp">
-
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/custom_option_2"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:hint="@string/custom_question_option_2"
-                android:inputType="text"
-                android:maxLength="24" />
-
-        </com.google.android.material.textfield.TextInputLayout>
-
-        <com.google.android.material.textfield.TextInputLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp">
-
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/custom_option_3"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:hint="@string/custom_question_option_3"
-                android:inputType="text"
-                android:maxLength="24" />
-
-        </com.google.android.material.textfield.TextInputLayout>
-
-        <com.google.android.material.textfield.TextInputLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp">
-
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/custom_option_4"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:hint="@string/custom_question_option_4"
-                android:inputType="text"
-                android:maxLength="24" />
-
-        </com.google.android.material.textfield.TextInputLayout>
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
-            android:text="@string/custom_question_correct"
-            android:textColor="@color/ink"
-            android:textSize="13sp" />
-
-        <RadioGroup
-            android:id="@+id/custom_correct_group"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:gravity="center_vertical"
             android:orientation="horizontal">
 
             <RadioButton
                 android:id="@+id/custom_correct_1"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:checked="true"
+                android:contentDescription="@string/custom_question_mark_correct" />
+
+            <com.google.android.material.textfield.TextInputLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:checked="true"
-                android:text="@string/custom_question_option_a" />
+                android:layout_weight="1">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/custom_option_1"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="@string/custom_question_option_1"
+                    android:inputType="text"
+                    android:maxLength="24" />
+
+            </com.google.android.material.textfield.TextInputLayout>
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
 
             <RadioButton
                 android:id="@+id/custom_correct_2"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:contentDescription="@string/custom_question_mark_correct" />
+
+            <com.google.android.material.textfield.TextInputLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="@string/custom_question_option_b" />
+                android:layout_weight="1">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/custom_option_2"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="@string/custom_question_option_2"
+                    android:inputType="text"
+                    android:maxLength="24" />
+
+            </com.google.android.material.textfield.TextInputLayout>
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
 
             <RadioButton
                 android:id="@+id/custom_correct_3"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:contentDescription="@string/custom_question_mark_correct" />
+
+            <com.google.android.material.textfield.TextInputLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="@string/custom_question_option_c" />
+                android:layout_weight="1">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/custom_option_3"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="@string/custom_question_option_3"
+                    android:inputType="text"
+                    android:maxLength="24" />
+
+            </com.google.android.material.textfield.TextInputLayout>
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
 
             <RadioButton
                 android:id="@+id/custom_correct_4"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:contentDescription="@string/custom_question_mark_correct" />
+
+            <com.google.android.material.textfield.TextInputLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="@string/custom_question_option_d" />
+                android:layout_weight="1">
 
-        </RadioGroup>
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/custom_option_4"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="@string/custom_question_option_4"
+                    android:inputType="text"
+                    android:maxLength="24" />
+
+            </com.google.android.material.textfield.TextInputLayout>
+
+        </LinearLayout>
 
     </LinearLayout>
 

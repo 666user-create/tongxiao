@@ -217,6 +217,24 @@ Lead 随后按报告拍板的两项设计决策 + 三项打磨：
 配套改动：进度行常显答错次数（"第 1 / 2 题 · 已答错 2 次"）；编辑页在「选择题」下新增三选一「答错之后」；策略随 `challengeOverrideJson` 存储与组内同步，接收端 `clamped()` 后生效。
 
 测试：`UnlockActivityTest`（ESCALATE 追加难题后题数 2→3）、`EditAlarmActivityTest`（选"锁定冷却"持久化为 `ADD_SNOOZE`）；共 **366 tests / 0 failed**。
+
+## 5.8 功能自检（Lead 全流程实测）
+
+按"测试一下功能是否有异常"做了一轮功能自检，**发现并修掉 2 个真实可用性问题 + 1 个 flaky 测试**：
+
+| # | 现象 | 根因 | 修复 |
+|---|---|---|---|
+| A1 | 自定义题目对话框里，键盘展开时"正确答案"单选区被键盘盖住，无法边填边选（实测两次点偏） | 选择答案的单选区在选项字段下方，键盘一弹就挡住 | 把 4 个单选点**内嵌到每个选项字段左侧**（边填边标）；互斥逻辑抽成 `wireCorrectRadios()`，生产与测试共用同一段代码 |
+| A2 | 键盘展开时对话框的"确定/取消"被遮住（实测一次点到了桌面壁纸选择器） | `AlertDialog` 默认不随 IME 调整 | 对话框 `setSoftInputMode(SOFT_INPUT_ADJUST_RESIZE)`，实测键盘展开后"确定"仍可见（bottom=1270/2400） |
+| A3 | `GroupManagerTest` 在全量套件里偶发失败（单独跑 3/3 全过） | 真实 socket 的"发送方链路"比 `handshake()` 晚一步注册；测试对首次 `send()` 直接 `assertTrue` | 改为 `TestAwait.until(...)` 重试到链路就绪；连跑两轮全量均 **366/366** |
+
+实测确认正常的功能（节选）：
+
+- 自定义题目：新增（题干 + 4 选项 + 点 B 标正确）→ 列表显示 `1. 7x7 / 正确答案：B. 49`；删除 + 二次确认 → 回到空态
+- 每闹钟挑战配置：编辑页勾「选择题 + 我的题目 + 加一道难题」→ 保存 → Provider 读回 `challengeOverrideJson={"mode":"QUIZ",...,"wrongPolicy":"ESCALATE","questionSource":"MY_OWN"}`
+- 四个 tab、编辑页三组选择器（模式/题目来源/答错惩罚）、地区三滚轮、Provider 只读与注入拒绝、权限横幅、删除流程、闹钟注册与取消——均正常，`logcat -b crash` 全程为空
+
+> 一条给后来者的经验：`adb shell pm clear` 会连运行时权限一起清掉，之后要重新 `pm grant POST_NOTIFICATIONS`，否则会出现"权限横幅挡住点击导致脚本点偏"的假故障。
 ## 6. 已知未覆盖项
 
 - 真实跨设备 NSD 发现（模拟器只覆盖了 127.0.0.1 回环；真机需同热点）

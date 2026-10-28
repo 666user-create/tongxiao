@@ -155,8 +155,8 @@ public class GroupManagerTest {
                 () -> !dbB.remoteAlarmDao().getRinging().isEmpty());
         assertEquals(ringing.uid, dbB.remoteAlarmDao().getRinging().get(0).srcAlarmUid);
 
-        assertTrue("B can aim the command at A",
-                managerB.send(identityA.deviceId(),
+        TestAwait.until("B can aim the command at A", 5_000L,
+                () -> managerB.send(identityA.deviceId(),
                         GroupMessage.cmdMute(identityA.deviceId(), ringing.uid)));
 
         TestAwait.until("A's gateway was asked to mute", 5_000L,
@@ -172,8 +172,12 @@ public class GroupManagerTest {
         // A revokes everything B may do; the denial must happen on A.
         dbA.groupMemberDao().setGrantedMask(identityB.deviceId(), 0);
 
-        assertTrue(managerB.send(identityA.deviceId(),
-                GroupMessage.cmdMute(identityA.deviceId(), "uid-live")));
+        // The link is a real socket: `handshake()` guarantees the HELLO exchange, but
+        // the outgoing link on B can still be registered a beat later. Retry instead of
+        // asserting on the first attempt (this flaked only under full-suite load).
+        TestAwait.until("B can reach A", 5_000L,
+                () -> managerB.send(identityA.deviceId(),
+                        GroupMessage.cmdMute(identityA.deviceId(), "uid-live")));
 
         TestAwait.until("B received a mute ACK denied with PERMISSION_DENIED", 5_000L, () -> {
             GroupMessage ack = findAckMute(inboundAtB, false);

@@ -126,11 +126,7 @@
     <string name="custom_question_option_2">选项 B</string>
     <string name="custom_question_option_3">选项 C</string>
     <string name="custom_question_option_4">选项 D</string>
-    <string name="custom_question_option_a">A</string>
-    <string name="custom_question_option_b">B</string>
-    <string name="custom_question_option_c">C</string>
-    <string name="custom_question_option_d">D</string>
-    <string name="custom_question_correct">哪个是正确答案</string>
+    <string name="custom_question_mark_correct">标记为正确答案</string>
     <string name="custom_question_answer_line">正确答案：%1$s. %2$s</string>
     <!-- Step 4.2/4.3 challenge -->
     <string name="unlock_progress">第 %1$d / %2$d 题 · 答对才能停铃</string>

@@ -1,6 +1,7 @@
 package com.course.tongxiao.ui;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
@@ -160,11 +161,27 @@ public class CustomQuestionActivityTest {
             assertNotNull("option A..D fields exist",
                     dialog[0].findViewById(R.id.custom_option_1));
             assertNotNull(dialog[0].findViewById(R.id.custom_option_4));
-            RadioButton third = dialog[0].findViewById(R.id.custom_correct_3);
-            assertNotNull("answer selector rendered", third);
-            assertEquals("C", String.valueOf(third.getText()));
-            RadioButton first = dialog[0].findViewById(R.id.custom_correct_1);
-            assertTrue("A is the default answer", first.isChecked());
+            // Each option row carries its own radio so the answer can be marked while
+            // typing (a separate section was covered by the keyboard).
+            final RadioButton[] radios = {
+                    dialog[0].findViewById(R.id.custom_correct_1),
+                    dialog[0].findViewById(R.id.custom_correct_2),
+                    dialog[0].findViewById(R.id.custom_correct_3),
+                    dialog[0].findViewById(R.id.custom_correct_4)};
+            for (RadioButton radio : radios) {
+                assertNotNull("inline answer radio rendered", radio);
+                assertNotNull("radio explains itself to screen readers",
+                        radio.getContentDescription());
+            }
+            assertTrue("A is the default answer", radios[0].isChecked());
+            assertFalse(radios[1].isChecked());
+
+            // Same wiring the dialog installs: mutual exclusivity is manual because
+            // the radios are not inside a RadioGroup.
+            CustomQuestionActivity.wireCorrectRadios(radios);
+            radios[2].performClick();
+            assertTrue("tapping C selects it", radios[2].isChecked());
+            assertFalse("and deselects A", radios[0].isChecked());
         }
     }
 }
