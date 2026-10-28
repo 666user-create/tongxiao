@@ -1,7 +1,7 @@
 # 明早验收清单（同晓 v1.0）
 
 > 面向验收人的 10 分钟检查表。每条都写清「怎么做 / 应该看到什么 / 不符合说明什么问题」。
-> 当前基线：`48b2f6d` 之后的 G4 返工提交；**328 tests / 0 failed**，lint **0 error / 0 warning**。
+> 当前基线：`48b2f6d` 之后的 G4 返工提交；**334 tests / 0 failed**，lint **0 error / 0 warning**。
 
 ## 0. 安装（2 分钟）
 
@@ -74,7 +74,7 @@ adb install -r D:\Android\tongxiao\dist\tongxiao-release.apk
 
 | 材料 | 位置 | 看点 |
 |---|---|---|
-| 测试报告 | `docs/test-report.md` | 328 用例、分层策略、两轮 G4 评审抓出的 3 BLOCKER + 20 余项 MAJOR/MINOR 及修复（§5.1 / §5.2） |
+| 测试报告 | `docs/test-report.md` | 334 用例、分层策略、两轮 G4 评审（§5.1/§5.2）与专项 QA 实测（§5.3）抓出的 3 BLOCKER + 30 余项缺陷及修复 |
 | 设计文档 | `docs/design.md` | 11 章；§7.2 讲清"离线优先榜单"的取舍 |
 | 收尾计划 | `docs/wrapup-plan.md` | W1–W12 全部完成情况 |
 | 答辩材料 | `docs/ppt-outline.md` | 12 页 + 5 个预备问题答案 |

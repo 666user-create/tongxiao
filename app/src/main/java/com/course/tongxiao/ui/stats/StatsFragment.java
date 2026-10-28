@@ -201,8 +201,13 @@ public class StatsFragment extends Fragment {
             if (i < stats.snoozeTop.size()) {
                 StatsAggregator.SnoozeRow item = stats.snoozeTop.get(i);
                 String label = labels.get(item.alarmId);
-                if (label == null || label.isEmpty()) {
+                if (!labels.containsKey(item.alarmId)) {
+                    // Not in the alarm table any more: the row really was deleted.
                     label = getString(R.string.stats_alarm_deleted);
+                } else if (label == null || label.isEmpty()) {
+                    // Still exists but was never named — the list screen shows the
+                    // same default, so "已删除的闹钟" here would be a lie.
+                    label = getString(R.string.alarm_default_label);
                 }
                 row.setText(getString(R.string.stats_snooze_row, label, item.count));
                 row.setVisibility(View.VISIBLE);

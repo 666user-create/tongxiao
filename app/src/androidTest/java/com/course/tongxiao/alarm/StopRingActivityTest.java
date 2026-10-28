@@ -113,6 +113,43 @@ public class StopRingActivityTest {
     }
 
     @Test
+    public void snooze_silencesWithoutRecordingStop_andKeepsOneShotArmed() throws Exception {
+        // Regression (P1 漏响): 稍后提醒 used to silence through the STOP path, which
+        // records STOPPED, disables a ONCE alarm and re-arms the regular schedule on
+        // the same PendingIntent request code — wiping the snooze it had just armed,
+        // so the user was never woken again.
+        Alarm once = new Alarm();
+        once.hour = 6;
+        once.minute = 45;
+        once.enabled = true;
+        once.snoozeMin = 10;
+        once.repeatMode = Alarm.RepeatMode.ONCE;
+        int onceId = (int) db.alarmDao().insert(once);
+        try (ActivityScenario<StopRingActivity> scenario =
+                     ActivityScenario.launch(intentFor(onceId))) {
+
+            scenario.onActivity(activity ->
+                    activity.findViewById(R.id.btn_snooze).performClick());
+            Thread.sleep(1500);
+
+            List<AlarmEvent> events = db.alarmEventDao().getRecent(onceId, 0);
+            boolean snoozed = false;
+            boolean stopped = false;
+            for (AlarmEvent event : events) {
+                snoozed |= event.type == AlarmEvent.Type.SNOOZE;
+                stopped |= event.type == AlarmEvent.Type.STOPPED;
+            }
+            assertTrue("snooze must record a SNOOZE event", snoozed);
+            assertFalse("snooze must not record a STOPPED event", stopped);
+            assertTrue("snooze must not switch a one-shot alarm off",
+                    db.alarmDao().getById(onceId).enabled);
+        } finally {
+            db.alarmEventDao().deleteByAlarm(onceId);
+            db.alarmDao().deleteById(onceId);
+        }
+    }
+
+    @Test
     public void missingAlarm_stillFinishesWithoutRingingForever() throws Exception {
         int ghostId = alarmId + 5000;
         try (ActivityScenario<StopRingActivity> scenario =

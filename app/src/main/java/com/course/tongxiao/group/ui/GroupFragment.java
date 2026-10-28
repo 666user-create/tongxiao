@@ -230,6 +230,21 @@ public class GroupFragment extends Fragment {
         super.onPause();
     }
 
+    /**
+     * The tab host swaps fragments with show/hide (MainActivity pattern), so a
+     * hidden→visible transition does NOT call {@link #onResume}. Without this the
+     * master-switch banner stayed stale: turning 允许宿舍互助 off in 设置 and coming
+     * back to 宿舍 still showed the "舍友可远程静音" hint until the app restarted.
+     */
+    @Override
+    public void onHiddenChanged(boolean hidden) {
+        super.onHiddenChanged(hidden);
+        if (!hidden) {
+            renderGroupState();
+            renderOpLog();
+        }
+    }
+
     @Override
     public void onDestroyView() {
         stopPolling();
@@ -288,8 +303,14 @@ public class GroupFragment extends Fragment {
     private void afterJoiningGroup() {
         renderGroupState();
         session.submitIo(() -> {
-            int rows = db.alarmDao().setSharedToAll(true);
-            Log.i(TAG, "shared " + rows + " existing alarm(s) with the group");
+            // One-time bulk share: alarms that predate the group would otherwise never
+            // be pushed. Re-joining must NOT redo it — after the first time,
+            // sharedToGroup=false is a deliberate choice made on the edit screen.
+            if (!identity.hasBackfilledSharing()) {
+                int rows = db.alarmDao().setSharedToAll(true);
+                identity.markSharingBackfilled();
+                Log.i(TAG, "shared " + rows + " existing alarm(s) with the group (one-time)");
+            }
             manager.broadcastSync();
         });
         session.ensureStarted();

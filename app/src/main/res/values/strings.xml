@@ -23,6 +23,7 @@
     <string name="edit_repeat_once">仅一次</string>
     <string name="edit_skip_holidays">跳过法定节假日</string>
     <string name="edit_snooze_title">贪睡间隔（分钟）</string>
+    <string name="edit_snooze_value">%1$d 分钟</string>
     <string name="edit_vibrate">响铃时振动</string>
     <string name="edit_challenge">停铃挑战（答对选择题才能停）</string>
     <string name="edit_advance_weather">天气不佳时提前响</string>

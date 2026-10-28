@@ -10,6 +10,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.widget.EditText;
 import android.widget.RadioGroup;
+import android.widget.TextView;
 
 import androidx.test.core.app.ActivityScenario;
 import androidx.test.core.app.ApplicationProvider;
@@ -62,6 +63,45 @@ public class EditAlarmActivityTest {
                 .putExtra(AlarmIntents.EXTRA_ALARM_UID, alarm.uid);
         return PendingIntent.getBroadcast(ctx, alarm.id, intent,
                 PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_NO_CREATE) != null;
+    }
+
+    @Test
+    public void snoozeSlider_showsItsValue_nextToTheTitle() throws Exception {
+        // Regression: the Material3 slider draws no label of its own, so the chosen
+        // snooze interval was invisible — the read-out beside the title fixes that.
+        String label = "滑杆测试-" + System.nanoTime();
+        try (ActivityScenario<EditAlarmActivity> scenario =
+                     ActivityScenario.launch(EditAlarmActivity.class)) {
+            final String[] initial = new String[1];
+            final String[] moved = new String[1];
+
+            scenario.onActivity(activity -> {
+                ((EditText) activity.findViewById(R.id.edit_label)).setText(label);
+                TextView value = activity.findViewById(R.id.edit_snooze_value);
+                initial[0] = value == null ? null : value.getText().toString();
+                ((com.google.android.material.slider.Slider)
+                        activity.findViewById(R.id.edit_snooze)).setValue(25);
+                moved[0] = value == null ? null : value.getText().toString();
+            });
+            assertNotNull("the snooze read-out exists", initial[0]);
+            assertTrue("default interval is shown: '" + initial[0] + "'",
+                    initial[0].contains("10"));
+            assertTrue("dragging the slider updates the read-out: '" + moved[0] + "'",
+                    moved[0].contains("25"));
+
+            saveViaButton(scenario);
+            Thread.sleep(1500);
+
+            Alarm stored = null;
+            for (Alarm a : db.alarmDao().getAll()) {
+                if (label.equals(a.label)) {
+                    stored = a;
+                }
+            }
+            assertNotNull("alarm persisted", stored);
+            created.add(stored.id);
+            assertEquals("the shown value is the value that gets stored", 25, stored.snoozeMin);
+        }
     }
 
     @Test

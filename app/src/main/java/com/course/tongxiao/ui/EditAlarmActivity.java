@@ -70,6 +70,8 @@ public class EditAlarmActivity extends AppCompatActivity {
     private MaterialButtonToggleGroup dayGroup;
     private MaterialSwitch skipHolidaysSwitch;
     private Slider snoozeSlider;
+    /** Read-out for the slider: Material3 draws no value label of its own. */
+    private TextView snoozeValue;
     private MaterialSwitch vibrateSwitch;
     private MaterialSwitch challengeSwitch;
     private MaterialSwitch advanceWeatherSwitch;
@@ -111,9 +113,10 @@ public class EditAlarmActivity extends AppCompatActivity {
         toolbar.setNavigationContentDescription(R.string.dialog_cancel);
         toolbar.setNavigationOnClickListener(v -> finish());
         // Edge-to-edge: pad the ROOT (not the fixed-height toolbar, which would
-        // squeeze its content out) and keep the scroll area above the keyboard.
-        UiInsets.padSystemBars(findViewById(R.id.edit_root));
-        UiInsets.padSystemBarsAndIme(findViewById(R.id.edit_scroll), 8);
+        // squeeze its content out). The IME inset must go on the root as well:
+        // padding only the ScrollView left the fixed 保存/删除 bar drawn underneath
+        // the keyboard, so the primary action was unreachable while typing a name.
+        UiInsets.padSystemBarsAndIme(findViewById(R.id.edit_root), 0);
 
         timeButton = findViewById(R.id.edit_time);
         labelInput = findViewById(R.id.edit_label);
@@ -121,6 +124,9 @@ public class EditAlarmActivity extends AppCompatActivity {
         dayGroup = findViewById(R.id.edit_day_group);
         skipHolidaysSwitch = findViewById(R.id.edit_skip_holidays);
         snoozeSlider = findViewById(R.id.edit_snooze);
+        snoozeValue = findViewById(R.id.edit_snooze_value);
+        snoozeSlider.addOnChangeListener((slider, value, fromUser) -> renderSnoozeValue());
+        renderSnoozeValue();
         vibrateSwitch = findViewById(R.id.edit_vibrate);
         challengeSwitch = findViewById(R.id.edit_challenge);
         advanceWeatherSwitch = findViewById(R.id.edit_advance_weather);
@@ -186,6 +192,15 @@ public class EditAlarmActivity extends AppCompatActivity {
         timeButton.setText(String.format(Locale.CHINA, "%02d:%02d", hour, minute));
     }
 
+    /** Keeps the snooze read-out in sync with the slider thumb. */
+    private void renderSnoozeValue() {
+        if (snoozeValue == null || snoozeSlider == null) {
+            return;
+        }
+        snoozeValue.setText(getString(R.string.edit_snooze_value,
+                (int) Math.round(snoozeSlider.getValue())));
+    }
+
     private void updateVisibility() {
         boolean custom = repeatGroup.getCheckedRadioButtonId() == R.id.repeat_custom;
         dayGroup.setVisibility(custom ? android.view.View.VISIBLE : android.view.View.GONE);
@@ -243,6 +258,7 @@ public class EditAlarmActivity extends AppCompatActivity {
                 updateTimeLabel();
                 labelInput.setText(loaded.label);
                 snoozeSlider.setValue(Math.max(5, Math.min(30, loaded.snoozeMin)));
+                renderSnoozeValue();
                 vibrateSwitch.setChecked(loaded.vibrate);
                 skipHolidaysSwitch.setChecked(loaded.skipHolidays);
                 advanceWeatherSwitch.setChecked(loaded.advanceEnabled);

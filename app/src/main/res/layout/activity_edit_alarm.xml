@@ -268,14 +268,32 @@
                 android:visibility="gone"
                 android:text="@string/edit_skip_holidays" />
 
-            <TextView
-                android:layout_width="wrap_content"
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="24dp"
-                android:text="@string/edit_snooze_title"
-                android:textColor="@color/ink"
-                android:textSize="15sp"
-                android:textStyle="bold" />
+                android:baselineAligned="true"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/edit_snooze_title"
+                    android:textColor="@color/ink"
+                    android:textSize="15sp"
+                    android:textStyle="bold" />
+
+                <!-- The wheel-free slider has no label of its own (Material3 draws
+                     none), so the chosen interval was invisible: show it here. -->
+                <TextView
+                    android:id="@+id/edit_snooze_value"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/ink"
+                    android:textSize="15sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
 
             <com.google.android.material.slider.Slider
                 android:id="@+id/edit_snooze"

@@ -138,6 +138,28 @@ public class AlarmListScreenTest {
             assertTrue("other alarm untouched", db.alarmDao().getById(firstId).enabled);
             assertFalse("repository reports one enabled alarm",
                     db.alarmDao().getEnabled().isEmpty());
+
+            // Regression: the ViewModel used to mutate the same Alarm instance the
+            // adapter held, so DiffUtil reported "unchanged" and the row was never
+            // rebound — it kept advertising a next wake-up for a switched-off alarm.
+            String nextText = "?";
+            for (int i = 0; i < 50 && !nextText.isEmpty(); i++) {
+                final String[] read = new String[1];
+                scenario.onActivity(activity -> {
+                    RecyclerView rv = activity.findViewById(R.id.alarm_list);
+                    View row = rv.getChildAt(0);
+                    TextView next = row == null ? null : row.findViewById(R.id.alarm_next);
+                    read[0] = next == null || next.getText() == null
+                            ? null : next.getText().toString();
+                });
+                nextText = read[0] == null ? "" : read[0];
+                if (nextText.isEmpty()) {
+                    break;
+                }
+                Thread.sleep(100);
+            }
+            assertEquals("a disabled alarm must not still show a next wake-up",
+                    "", nextText);
         }
     }
 }

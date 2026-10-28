@@ -33,6 +33,8 @@ public final class GroupIdentity {
     private static final String KEY_DEVICE_ID = "device_id";
     private static final String KEY_NICK = "nick";
     private static final String KEY_GROUP_CODE = "group_code";
+    /** Set once the pre-existing alarms were bulk-shared with a group. */
+    private static final String KEY_SHARED_BACKFILLED = "shared_backfilled";
 
     private final SharedPreferences prefs;
 
@@ -96,5 +98,22 @@ public final class GroupIdentity {
         }
         prefs.edit().putString(KEY_GROUP_CODE, trimmed).apply();
         return true;
+    }
+
+    /**
+     * True once this device has already shared its pre-existing alarms with a group.
+     *
+     * <p>The bulk share exists so alarms created before the dorm feature are not
+     * invisible ("nothing gets pushed"); it must happen once, not on every re-join,
+     * because afterwards {@code sharedToGroup = false} is a deliberate user choice
+     * that re-joining must not silently undo.
+     */
+    public boolean hasBackfilledSharing() {
+        return prefs.getBoolean(KEY_SHARED_BACKFILLED, false);
+    }
+
+    /** Marks the one-time bulk share as done. */
+    public void markSharingBackfilled() {
+        prefs.edit().putBoolean(KEY_SHARED_BACKFILLED, true).apply();
     }
 }

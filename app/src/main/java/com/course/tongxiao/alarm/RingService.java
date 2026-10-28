@@ -56,6 +56,16 @@ public class RingService extends Service {
 
     public static final String EXTRA_ALARM_ID = AlarmIntents.EXTRA_ALARM_ID;
 
+    /**
+     * Silences the ring without the "user stopped" bookkeeping.
+     *
+     * <p>Snooze must use this: {@link #ACTION_STOP_RING} records a STOPPED event and
+     * re-arms the regular schedule (or disables a ONCE alarm), which overwrites the
+     * snooze registration that was just made on the same PendingIntent request code —
+     * the "10 分钟后" wake-up was silently lost that way.
+     */
+    public static final String EXTRA_SILENT_ONLY = "silent_only";
+
     private static final String CHANNEL_ID = "alarm_ringing";
 
     /** Upper bound for one ring (10 minutes): "宁可不响到没电". */
@@ -167,7 +177,10 @@ public class RingService extends Service {
             // screen: recording the event feeds the trend/adaptive samples, and for a
             // ONCE alarm it also switches the row off (otherwise a stopped one-shot
             // stays visible as "enabled" but never rings again — a zombie row).
-            recordStoppedFromNotification();
+            // Snooze silences the same way but owns its own re-arm, so it opts out.
+            if (!intent.getBooleanExtra(EXTRA_SILENT_ONLY, false)) {
+                recordStoppedFromNotification();
+            }
             shutdown();
             return START_NOT_STICKY;
         }
@@ -488,6 +501,20 @@ public class RingService extends Service {
                 .putExtra(EXTRA_ALARM_ID, alarmIdValue);
         // startService from a visible UI is fine; the notification action uses
         // PendingIntent.getService() and is not affected by background limits.
+        context.startService(intent);
+    }
+
+    /**
+     * Silences the ring only: no STOPPED event, no re-arm, no ONCE disable.
+     *
+     * <p>Used by the snooze path, which does its own {@code onSnoozed} bookkeeping;
+     * running the stop path as well would cancel the snooze it just scheduled.
+     */
+    public static void silence(Context context, int alarmIdValue) {
+        Intent intent = new Intent(context, RingService.class)
+                .setAction(ACTION_STOP_RING)
+                .putExtra(EXTRA_ALARM_ID, alarmIdValue)
+                .putExtra(EXTRA_SILENT_ONLY, true);
         context.startService(intent);
     }
 }

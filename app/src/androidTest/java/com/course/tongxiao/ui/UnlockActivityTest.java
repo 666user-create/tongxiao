@@ -137,6 +137,61 @@ public class UnlockActivityTest {
         }
     }
 
+    @Test
+    public void wrongAnswer_paintsFeedbackInsteadOfSilentlyResetting() throws Exception {
+        // Regression: the RETRY/ESCALATE branches set the feedback text and then
+        // called showQuestion(), which clears that very view — a wrong answer looked
+        // like nothing happened at all.
+        try (ActivityScenario<UnlockActivity> scenario =
+                     ActivityScenario.launch(intentFor(alarmId))) {
+            sleep(1200);
+            boolean sawWrongAnswer = false;
+            for (int b = 0; b < 4 && !sawWrongAnswer && !isFinishing(scenario); b++) {
+                final int which = b;
+                final String[] before = new String[1];
+                final String[] after = new String[2];
+                scenario.onActivity(activity -> before[0] = questionText(activity));
+                scenario.onActivity(activity -> {
+                    Button button = activity.findViewById(optionId(which));
+                    if (button != null && button.getVisibility() == View.VISIBLE) {
+                        button.performClick();
+                    }
+                });
+                sleep(300);
+                if (isFinishing(scenario)) {
+                    break; // the challenge was passed by this click
+                }
+                scenario.onActivity(activity -> {
+                    after[0] = questionText(activity);
+                    after[1] = feedbackText(activity);
+                });
+                if (before[0] != null && before[0].equals(after[0])) {
+                    sawWrongAnswer = true; // same question => the answer was wrong
+                    assertFalse("a wrong answer must show feedback instead of a blank line",
+                            after[1] == null || after[1].trim().isEmpty());
+                }
+            }
+            assertTrue("clicking four options over two questions must hit a wrong answer",
+                    sawWrongAnswer || isFinishing(scenario));
+        }
+    }
+
+    private static int optionId(int index) {
+        return index == 0 ? R.id.btn_opt_0
+                : index == 1 ? R.id.btn_opt_1
+                : index == 2 ? R.id.btn_opt_2 : R.id.btn_opt_3;
+    }
+
+    private static String questionText(android.app.Activity activity) {
+        TextView view = activity.findViewById(R.id.unlock_question);
+        return view == null || view.getText() == null ? null : view.getText().toString();
+    }
+
+    private static String feedbackText(android.app.Activity activity) {
+        TextView view = activity.findViewById(R.id.unlock_feedback);
+        return view == null || view.getText() == null ? null : view.getText().toString();
+    }
+
     private static boolean isFinishing(ActivityScenario<UnlockActivity> scenario) {
         final boolean[] finishing = {false};
         scenario.onActivity(activity ->

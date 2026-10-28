@@ -1,13 +1,13 @@
 # 同晓 · 测试报告
 
 > 生成方式：本文件由用户在模拟器 `Pixel_7_API_36` 上实跑的 `gradlew connectedDebugAndroidTest` 结果与各里程碑关卡记录汇总。
-> 状态：**已完成**（最终全量运行：328 tests / 0 failed / 0 skipped，模拟器 Pixel_7_API_36）
+> 状态：**已完成**（最终全量运行：334 tests / 0 failed / 0 skipped，模拟器 Pixel_7_API_36）
 
 ## 1. 结论速览
 
 | 项目 | 结果 |
 |---|---|
-| 单元/集成测试（instrumentation） | **328 tests / 0 failed / 0 errors / 0 skipped** |
+| 单元/集成测试（instrumentation） | **334 tests / 0 failed / 0 errors / 0 skipped** |
 | 构建（G1，含 lint） | `BUILD SUCCESSFUL`，lint **0 error**，仅余 2 条已知提示 |
 | 手动验证（G5） | 保存落库、滚轮时间选择、响铃全链路、Provider 只读、双机互助（见 §4） |
 
@@ -119,6 +119,27 @@
 | P2 | 无最大响铃时长 | 停铃页不可达时会响到没电 | 10 分钟上限，超时记账 `source=timeout` 后自停 |
 | P2 | 挑战 ADD_SNOOZE 只改文案、反馈不清理、README 写"可选 1–5 题" | 策略名不副实 / 文案与实际不符 | 真实冷却（禁用选项 N 秒后换题）、每题清空反馈、文档改成"引擎支持 1–5 题，v1 界面固定 2 题" |
 | P2 | 列表底部被 FAB 压住、地区按钮在加载中报"数据不可用"、榜单空态双文案、Switch 无 contentDescription、"长按 3 秒"文案与实际长按不符 | 各种打磨瑕疵 | 逐项修掉（含文档 11 处口径对齐） |
+
+## 5.3 专项 QA：模拟器实测 + 自修（12 项流程）
+
+由一个专职 QA 在 `Pixel_7_API_36` 上按 12 项清单实测（首启/闹钟全流程/响铃/挑战/地区/宿舍/统计/权限/生命周期/Provider/异常输入），抓出 **7 个真缺陷**并全部修复，另发现 4 个环境限制与 2 个记录项。
+
+| 编号 | 现象 | 根因 | 修复 | 验证 |
+|---|---|---|---|---|
+| **D4（P1 漏响）** | 点"稍后提醒"后，10 分钟后的唤醒被取消；仅一次的闹钟还被禁用 | 贪睡用 `RingService.stop()`（ACTION_STOP_RING）静音，而该动作会记账并重排/禁用，正好覆盖掉刚排的 snooze（同一 requestCode） | 新增 `EXTRA_SILENT_ONLY` + `RingService.silence()`：只静音、不记账，贪睡自己负责 `onSnoozed` | 修后 pending=+9m56s、enabled=1，**实测 10 分钟后真的再次响铃**；补单测 |
+| D1 | 输入闹钟名时键盘遮住"保存/删除" | IME inset 加在 ScrollView 上，固定底栏仍被键盘覆盖（edge-to-edge 下 adjustResize 不生效） | 改为给根布局加 `padSystemBarsAndIme` | 截图：键盘展开时底栏完整可见 |
+| D3 | 关闭闹钟后仍显示"下次：今天 08:30" | ViewModel 原地改 `alarm.enabled`（adapter 持有的同一个对象）→ DiffUtil 判定未变 → 从不重绑 | 删除原地赋值，交给 Room 新对象触发重绑 | `enabled=0` 且"下次"行清空 |
+| D5 | 答错题没有任何反馈 | 先写反馈再 `showQuestion()`，被后者清空 | 先渲染题目再写反馈 | 显示"答错了，再想想"，可重答 |
+| D6 | 关闭互助总闸后回宿舍页无提示（要重启） | tab 用 show/hide，不走 `onResume` | 新增 `onHiddenChanged` 刷新 | 切 tab 后横幅立即出现 |
+| D7 | 未命名但存在的闹钟在统计里显示"已删除的闹钟" | 只判 `label` 为空，未区分"行已删/行在但无名" | 用 `labels.containsKey` 区分，无名显示默认名 | 显示"闹钟 · 贪睡 1 次" |
+| D2 | 贪睡滑块没有任何数值 | Material3 Slider 默认不画 label | 标题行右侧加读数并随拖动刷新 | 拖动显示"10 分钟 → 20 分钟" |
+
+QA 之后 Lead 又补了两处：
+
+- **D8（决策项）**：重新入组会 `setSharedToAll(true)`，静默覆盖用户手动关闭的单闹钟共享 → 改为**仅首次入组做一次批量共享**（`GroupIdentity.hasBackfilledSharing/markSharingBackfilled`），之后尊重用户选择；补回归测试。
+- **列表 DiffUtil 漏字段**：`areContentsTheSame` 未比较 `dayMask`/`advanceEnabled`/`advanceMaxMin`，而这些会影响"下次：…"显示 → 补上。
+
+环境限制跳过（非缺陷）：NSD 注册失败（模拟器无法构造）、ADD_SNOOZE 冷却（App 无该策略入口）、设备时钟跳变、滚轮只到分钟粒度（无法构造"10 秒后"）。
 ## 6. 已知未覆盖项
 
 - 真实跨设备 NSD 发现（模拟器只覆盖了 127.0.0.1 回环；真机需同热点）

@@ -46,6 +46,10 @@ public class AlarmListAdapter extends ListAdapter<Alarm, AlarmListAdapter.VH> {
                     && a.enabled == b.enabled
                     && a.repeatMode.equals(b.repeatMode)
                     && a.skipHolidays == b.skipHolidays
+                    // Both feed the derived "下次：…" line, so a change must rebind.
+                    && a.dayMask == b.dayMask
+                    && a.advanceEnabled == b.advanceEnabled
+                    && a.advanceMaxMin == b.advanceMaxMin
                     && eq(a.label, b.label);
         }
 

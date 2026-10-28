@@ -209,15 +209,20 @@ public class UnlockActivity extends AppCompatActivity implements SensorEventList
                 return;
             }
             case ESCALATE:
+                // showQuestion() clears the feedback line, so paint the question
+                // first and the message after it — otherwise 答错 showed nothing.
+                if (index < session.size()) {
+                    showQuestion();
+                }
                 feedbackView.setText(R.string.unlock_wrong_escalate);
                 break;
             case RETRY:
             default:
+                if (index < session.size()) {
+                    showQuestion();
+                }
                 feedbackView.setText(R.string.unlock_wrong_retry);
                 break;
-        }
-        if (index < session.size()) {
-            showQuestion();
         }
     }
 

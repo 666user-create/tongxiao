@@ -1,6 +1,7 @@
 package com.course.tongxiao.stats;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
@@ -238,6 +239,65 @@ public class StatsScreenTest {
                     firstSnoozeRow.contains(String.valueOf(SNOOZE_EVENTS)));
             assertTrue("remote mute counter rendered: '" + remoteCount + "'",
                     remoteCount.endsWith("次") && remoteMutes(remoteCount) >= 1);
+        }
+    }
+
+    @Test
+    public void unnamedAlarm_isNotReportedAsDeleted() throws Exception {
+        // Regression: an alarm with an empty label was rendered as 已删除的闹钟 in the
+        // snooze ranking even though the row still existed.
+        Alarm unnamed = new Alarm();
+        unnamed.label = "";
+        unnamed.hour = 6;
+        unnamed.minute = 50;
+        unnamed.repeatMode = Alarm.RepeatMode.DAILY;
+        unnamed.enabled = false;
+        int unnamedId = (int) db.alarmDao().insert(unnamed);
+        try {
+            for (int i = 0; i < 3; i++) {
+                AlarmEvent event = new AlarmEvent();
+                event.alarmId = unnamedId;
+                event.type = AlarmEvent.Type.SNOOZE;
+                event.fireAt = millisToday(6, 50);
+                event.stopAt = millisToday(6, 51);
+                db.alarmEventDao().insert(event);
+            }
+
+            final StatsFragment[] fragment = new StatsFragment[1];
+            try (ActivityScenario<MainActivity> scenario =
+                         ActivityScenario.launch(MainActivity.class)) {
+                scenario.onActivity(activity -> {
+                    fragment[0] = new StatsFragment();
+                    activity.getSupportFragmentManager().beginTransaction()
+                            .add(R.id.tab_container, fragment[0], "stats_unnamed_test")
+                            .commitNow();
+                });
+
+                String row = "";
+                for (int attempt = 0; attempt < 60; attempt++) {
+                    final String[] read = new String[1];
+                    scenario.onActivity(activity -> {
+                        View view = fragment[0].getView();
+                        if (view != null) {
+                            read[0] = text(view, R.id.stats_snooze_row_1);
+                        }
+                    });
+                    row = read[0] == null ? "" : read[0];
+                    if (row.contains("贪睡 3 次")) {
+                        break;
+                    }
+                    Thread.sleep(100);
+                }
+
+                assertTrue("snooze row rendered: '" + row + "'", row.contains("贪睡 3 次"));
+                assertFalse("an existing unnamed alarm must not be called deleted: '" + row + "'",
+                        row.contains("已删除"));
+                assertTrue("it shows the same default label as the list screen: '" + row + "'",
+                        row.contains("闹钟"));
+            }
+        } finally {
+            db.alarmEventDao().deleteByAlarm(unnamedId);
+            db.alarmDao().deleteById(unnamedId);
         }
     }
 

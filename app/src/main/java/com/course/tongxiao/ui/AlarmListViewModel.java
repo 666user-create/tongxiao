@@ -53,11 +53,16 @@ public class AlarmListViewModel extends ViewModel {
     /**
      * Toggle from the list switch: DB first (so the UI reflects intent even if
      * scheduling is refused), then register/cancel with AlarmManager.
+     *
+     * <p>Deliberately does NOT mutate {@code alarm.enabled} in place: that object is
+     * the row currently held by the adapter's ListAdapter, so mutating it makes
+     * DiffUtil.areContentsTheSame() report "no change" for the fresh Room emission
+     * and the row is never rebound — the derived "下次：…" line then kept advertising
+     * a wake-up for an alarm the user had just switched off.
      */
     public void setEnabled(Alarm alarm, boolean enabled) {
         worker.execute(() -> {
             repository.setEnabled(alarm.id, enabled);
-            alarm.enabled = enabled;
             try {
                 if (enabled) {
                     scheduler.schedule(alarm);

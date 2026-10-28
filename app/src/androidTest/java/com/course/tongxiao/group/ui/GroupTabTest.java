@@ -1,6 +1,7 @@
 package com.course.tongxiao.group.ui;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -136,6 +137,49 @@ public class GroupTabTest {
     }
 
     @Test
+    public void masterSwitchOff_showsTheBannerWhenTheTabIsShownAgain() throws Exception {
+        // Regression: the banner was only recomputed in onCreateView/onResume, and the
+        // tab host switches tabs with show/hide (no onResume), so turning 允许宿舍互助
+        // off in 设置 and coming back still claimed roommates could mute you.
+        com.course.tongxiao.data.SettingsStore settings =
+                new com.course.tongxiao.data.SettingsStore(ctx);
+        boolean original = settings.isGroupMasterSwitchOn();
+        settings.setGroupMasterSwitchOn(true);
+        identity.setGroupCode("654321");
+        try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
+            openGroupTab(scenario);
+            assertNotNull("dorm panel rendered",
+                    awaitView(scenario, R.id.group_master_off_banner, View.class));
+            Thread.sleep(400);
+            assertEquals("master switch is on: no banner",
+                    View.GONE, visibility(scenario, R.id.group_master_off_banner));
+
+            // The user turns the master switch off on the settings tab ...
+            settings.setGroupMasterSwitchOn(false);
+            scenario.onActivity(activity -> ((BottomNavigationView)
+                    activity.findViewById(R.id.bottom_nav)).setSelectedItemId(R.id.tab_settings));
+            Thread.sleep(400);
+            // ... and comes back to the dorm tab.
+            openGroupTab(scenario);
+            Thread.sleep(500);
+
+            assertEquals("the master-off warning must refresh on tab switch",
+                    View.VISIBLE, visibility(scenario, R.id.group_master_off_banner));
+        } finally {
+            settings.setGroupMasterSwitchOn(original);
+        }
+    }
+
+    private static int visibility(ActivityScenario<MainActivity> scenario, int id) {
+        final int[] result = {-1};
+        scenario.onActivity(activity -> {
+            View view = activity.findViewById(id);
+            result[0] = view == null ? -1 : view.getVisibility();
+        });
+        return result[0];
+    }
+
+    @Test
     public void ringingSharedAlarm_showsRingingBadgeAndMuteButton() throws Exception {
         // G4/B2 regression: the demo needs a visible mute entry. Seed the state the
         // peer would have pushed (member + mirror row with ringingNow), then assert
@@ -225,6 +269,57 @@ public class GroupTabTest {
         testDb().remoteAlarmDao().upsertAll(java.util.Collections.singletonList(row));
     }
 
+    /**
+     * Re-joining a group must not undo a deliberate per-alarm opt-out.
+     *
+     * <p>The first join bulk-shares pre-existing alarms (otherwise nothing is ever
+     * pushed); after that, sharedToGroup=false is the user's choice and a second
+     * join has to leave it alone.
+     */
+    @Test
+    public void rejoiningAGroup_doesNotOverrideAPerAlarmOptOut() throws Exception {
+        com.course.tongxiao.data.entity.Alarm alarm = new com.course.tongxiao.data.entity.Alarm();
+        alarm.label = "不共享的闹钟";
+        alarm.hour = 6;
+        alarm.minute = 40;
+        alarm.enabled = true;
+        alarm.sharedToGroup = false; // explicit opt-out
+        final int id = (int) testDb().alarmDao().insert(alarm);
+        identity.setGroupCode(""); // fresh device: backfill has not happened yet
+
+        try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
+            openGroupTab(scenario);
+            View createButton = awaitView(scenario, R.id.group_create_button, View.class);
+            assertNotNull(createButton);
+
+            // First join: the bulk share is expected to run once.
+            scenario.onActivity(activity ->
+                    activity.findViewById(R.id.group_create_button).performClick());
+            Thread.sleep(800);
+            assertTrue("first join shares pre-existing alarms",
+                    testDb().alarmDao().getById(id).sharedToGroup);
+
+            // User opts this one alarm out again, then leaves and re-joins.
+            com.course.tongxiao.data.entity.Alarm row = testDb().alarmDao().getById(id);
+            row.sharedToGroup = false;
+            testDb().alarmDao().update(row);
+            identity.setGroupCode("");
+
+            try (ActivityScenario<MainActivity> second =
+                         ActivityScenario.launch(MainActivity.class)) {
+                openGroupTab(second);
+                assertNotNull(awaitView(second, R.id.group_create_button, View.class));
+                second.onActivity(activity ->
+                        activity.findViewById(R.id.group_create_button).performClick());
+                Thread.sleep(800);
+
+                assertFalse("re-joining must respect the opt-out",
+                        testDb().alarmDao().getById(id).sharedToGroup);
+            }
+        } finally {
+            testDb().alarmDao().deleteById(id);
+        }
+    }
     private TongxiaoDb testDb() {
         return TongxiaoDb.get(ctx);
     }

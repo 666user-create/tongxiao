@@ -239,7 +239,9 @@ public class StopRingActivity extends Activity {
     /** Snooze: silence now, re-arm in N minutes, record it. */
     private void snoozeAndFinish() {
         disableButtons();
-        RingService.stop(this, alarmId);
+        // Silence ONLY: the stop path would disable a ONCE alarm and re-arm the
+        // regular schedule on the same request code, wiping the snooze below.
+        RingService.silence(this, alarmId);
         final int id = alarmId;
         final long startedAt = ringStartedAt;
         worker.execute(() -> {

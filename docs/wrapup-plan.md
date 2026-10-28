@@ -26,6 +26,17 @@
 | W10 | ContentProvider | 只读 `content://com.course.tongxiao.alarms` | 统计组 | — |
 | W11 | 文档与答辩材料 | 测试报告、README（含架构图/考点对照）、PPT 大纲、演示脚本 | Lead | 全部 |
 | W12 | 端到端验收 | 双模拟器互助演示 + 3 晚响铃 + 测试矩阵 | Lead | 全部 |
+| W13 | 模拟器实测并自修 | 12 项流程实测 + 缺陷修复 + 回归测试 | QA 组 | 全部 |
+
+### 执行状态（截至 2026-10-28）
+
+| 编号 | 状态 | 备注 |
+|---|---|---|
+| W1–W10 | ✅ 完成 | 328 条 instrumentation 测试；两轮独立评审（§5.1/§5.2 of test-report）抓出 3 个 BLOCKER / 20+ MAJOR 并全部修复 |
+| W11 | ✅ 完成 | `README.md`、`test-report.md`、`ppt-outline.md`、`demo-script.md`、`acceptance-checklist.md`；文档承诺已与实现逐条对齐（未实现的进"展望"） |
+| W12 | ⏳ 部分 | 单机流程已在模拟器实测；**双机同热点、连续 3 晚真实数据**需真机，属手工项 |
+| W13 | ✅ 完成 | 模拟器 12 项实测，抓出 7 个真缺陷并修复（含 1 个 P1 漏响），另加 2 处 Lead 补修；见 test-report §5.3 |
+
 
 ## 2. 并行策略（文件归属，避免写冲突）
 
