@@ -1,13 +1,13 @@
 # 同晓 · 测试报告
 
 > 生成方式：本文件由用户在模拟器 `Pixel_7_API_36` 上实跑的 `gradlew connectedDebugAndroidTest` 结果与各里程碑关卡记录汇总。
-> 状态：**已完成**（最终全量运行：340 tests / 0 failed / 0 skipped，模拟器 Pixel_7_API_36）
+> 状态：**已完成**（最终全量运行：341 tests / 0 failed / 0 skipped，模拟器 Pixel_7_API_36）
 
 ## 1. 结论速览
 
 | 项目 | 结果 |
 |---|---|
-| 单元/集成测试（instrumentation） | **340 tests / 0 failed / 0 errors / 0 skipped** |
+| 单元/集成测试（instrumentation） | **341 tests / 0 failed / 0 errors / 0 skipped** |
 | 构建（G1，含 lint） | `BUILD SUCCESSFUL`，lint **0 error**，仅余 2 条已知提示 |
 | 手动验证（G5） | 保存落库、滚轮时间选择、响铃全链路、Provider 只读、双机互助（见 §4） |
 
@@ -165,6 +165,31 @@ Lead 随后按报告拍板的两项设计决策 + 三项打磨：
 - 列表 DiffUtil 补 `dayMask`/`advanceEnabled`/`advanceMaxMin`（会影响"下次：…"显示）。
 
 记录但不修：2.0 字号下地区三滚轮相邻列文字重叠（NumberPicker 无 ellipsize/textSize API，需改选择流程）；横屏+2.0 挑战页只露 2 个选项（可滚动、紧急停止仍在屏内）；深色模式下保持浅色主题（v1 有意锁定）。
+
+## 5.5 全量回归（Lead 执行）
+
+一次全量回归重新跑通了"构建 + 全量测试 + 设备端功能流"，并**抓到一个此前没被任何测试覆盖的真回归**：
+
+| 项 | 结果 |
+|---|---|
+| `gradlew build`（含 release 变体与 lint） | BUILD SUCCESSFUL；lint **0 error / 0 warning** |
+| `connectedDebugAndroidTest`（先 `pm clear`） | **341 tests / 0 failed / 0 errors / 0 skipped** |
+| 冷启动 / 四 tab | 正常（闹钟 / 互助 / 统计 / 设置），无重复 Fragment |
+| 新建闹钟 → 保存 → 系统注册 | `dumpsys alarm` 显示 `RTC_WAKEUP` + `exactAllowReason=policy_permission` + `showIntent=startActivity`（全屏页链路已排程） |
+| 关闭闹钟 | "下次"行消失，`dumpsys alarm` 活动注册 **2 → 0** |
+| **重新开启闹钟** | **回归缺陷**：DB 已 `enabled=1` 但 AlarmManager 里没有注册（重开等于没开） |
+| 编辑页 / 删除 | 删除按钮仅在编辑态出现；确认框出现；确认后行删除、注册 2 → 0、Provider 查询返回空 |
+| 地区选择器 | 打开显示 3 个滚轮，取消无崩溃 |
+| 统计页 | 趋势/贪睡/被组员静音/互助榜单文案正确 |
+| 互助 tab | 创建组出 6 位组码、默认昵称"组员xxxx"、"共享中：我的 1 个闹钟"；退出组回到加入卡 |
+| 权限引导 | 拒绝通知权限后，列表页出现"通知权限未开启：锁屏时可能看不到停铃页，会只响铃不亮屏" + "去开启" |
+| Provider | `content query` 正常返回；`--projection "label,(SELECT nick FROM group_members)"` 被 `IllegalArgumentException` 拒绝 |
+| 崩溃 | 全程 `logcat -b crash` 为空 |
+
+**发现的回归（已修 + 已补测试）**：`AlarmListViewModel.setEnabled()` 在"关闭闹钟后行不重绑"那次修复里不再原地修改 `alarm.enabled`，但它随后把 adapter 持有的**旧对象**交给 `AlarmScheduler.schedule()`；调度器看到 `enabled=false` 直接 `cancel`，于是"重新打开开关"只是把数据库置了 1，**AlarmManager 里始终没有注册**——UI 显示"下次：…"却永远不会响。
+修法：`setEnabled` 在写库后重新从 Room 读一行（新增 `AlarmRepository.getById`）再交给调度器；补测试 `enablingAnAlarm_registersItAgain`（断言 DB `enabled` 与 `PendingIntent.FLAG_NO_CREATE` 都成立）。
+
+> 这条正是全量回归的价值：单元测试各自绿、UI 也"看起来对"，只有把"关→开→查系统注册"连起来走一遍才会暴露。
 ## 6. 已知未覆盖项
 
 - 真实跨设备 NSD 发现（模拟器只覆盖了 127.0.0.1 回环；真机需同热点）

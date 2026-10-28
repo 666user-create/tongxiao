@@ -2,6 +2,7 @@ package com.course.tongxiao.ui;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 import android.content.Context;
@@ -161,5 +162,63 @@ public class AlarmListScreenTest {
             assertEquals("a disabled alarm must not still show a next wake-up",
                     "", nextText);
         }
+    }
+    /**
+     * Switching an alarm back on must actually re-register it.
+     *
+     * <p>The list adapter holds a snapshot of the row; after the "do not mutate the
+     * adapter's object" fix, handing that stale object to the scheduler made it see
+     * {@code enabled = false} and refuse to register — the switch looked on while the
+     * alarm was never armed.
+     */
+    @Test
+    public void enablingAnAlarm_registersItAgain() throws Exception {
+        Alarm seed = new Alarm();
+        seed.label = "重开测试";
+        seed.hour = 9;
+        seed.minute = 15;
+        seed.enabled = false;
+        final int id = (int) db.alarmDao().insert(seed);
+
+        try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
+            waitForItems(scenario, 1);
+            // Rows are ordered by time; pick the 09:15 one instead of the first switch
+            // (toggling an already-on row would be a no-op and prove nothing).
+            final android.widget.CompoundButton[] target = {null};
+            scenario.onActivity(activity -> {
+                RecyclerView rv = activity.findViewById(R.id.alarm_list);
+                assertNotNull(rv);
+                for (int i = 0; i < rv.getChildCount(); i++) {
+                    View row = rv.getChildAt(i);
+                    TextView time = row.findViewById(R.id.alarm_time);
+                    if (time != null && "09:15".contentEquals(time.getText())) {
+                        target[0] = row.findViewById(R.id.alarm_switch);
+                    }
+                }
+            });
+            assertNotNull("the seeded row is on screen", target[0]);
+            scenario.onActivity(activity -> target[0].setChecked(true));
+            Thread.sleep(1500);
+
+            assertTrue("DB row is enabled", db.alarmDao().getById(id).enabled);
+            assertTrue("AlarmManager really got the registration",
+                    hasRegistration(db.alarmDao().getById(id)));
+        } finally {
+            db.alarmDao().deleteById(id);
+        }
+    }
+
+    private boolean hasRegistration(Alarm alarm) {
+        android.content.Intent intent = new android.content.Intent(
+                androidx.test.core.app.ApplicationProvider.getApplicationContext(),
+                com.course.tongxiao.alarm.AlarmReceiver.class)
+                .setAction(com.course.tongxiao.alarm.AlarmIntents.ACTION_FIRE_ALARM)
+                .putExtra(com.course.tongxiao.alarm.AlarmIntents.EXTRA_ALARM_ID, alarm.id)
+                .putExtra(com.course.tongxiao.alarm.AlarmIntents.EXTRA_ALARM_UID, alarm.uid);
+        return android.app.PendingIntent.getBroadcast(
+                androidx.test.core.app.ApplicationProvider.getApplicationContext(),
+                alarm.id, intent,
+                android.app.PendingIntent.FLAG_IMMUTABLE
+                        | android.app.PendingIntent.FLAG_NO_CREATE) != null;
     }
 }

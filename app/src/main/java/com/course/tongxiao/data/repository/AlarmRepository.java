@@ -2,6 +2,7 @@ package com.course.tongxiao.data.repository;
 
 import android.content.Context;
 
+import androidx.annotation.Nullable;
 import androidx.annotation.WorkerThread;
 import androidx.lifecycle.LiveData;
 
@@ -108,5 +109,24 @@ public class AlarmRepository {
     @WorkerThread
     public List<Alarm> getAll() {
         return db.alarmDao().getAll();
+    }
+
+    /**
+     * Re-reads one row.
+     *
+     * <p>Callers that changed a row and then hand it to {@code AlarmScheduler} must use
+     * this: the objects held by the list adapter are snapshots, so passing one of them
+     * after {@link #setEnabled} carries the old {@code enabled} value and the scheduler
+     * refuses to register it.
+     *
+     * @return the row, or null when it was deleted meanwhile
+     */
+    @Nullable
+    @WorkerThread
+    public Alarm getById(int id) {
+        if (id <= 0) {
+            return null;
+        }
+        return db.alarmDao().getById(id);
     }
 }

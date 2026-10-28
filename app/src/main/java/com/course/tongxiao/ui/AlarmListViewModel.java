@@ -59,13 +59,21 @@ public class AlarmListViewModel extends ViewModel {
      * DiffUtil.areContentsTheSame() report "no change" for the fresh Room emission
      * and the row is never rebound — the derived "下次：…" line then kept advertising
      * a wake-up for an alarm the user had just switched off.
+     *
+     * <p>Because of that, the object handed to the scheduler must be a <b>fresh row</b>
+     * from the database: {@code Alarmscheduler.schedule()} refuses to register a row
+     * whose {@code enabled} is false, and the adapter's instance still carries the old
+     * value. Reusing it made "switch an alarm back on" silently do nothing.
      */
     public void setEnabled(Alarm alarm, boolean enabled) {
         worker.execute(() -> {
             repository.setEnabled(alarm.id, enabled);
             try {
                 if (enabled) {
-                    scheduler.schedule(alarm);
+                    Alarm fresh = repository.getById(alarm.id);
+                    if (fresh != null) {
+                        scheduler.schedule(fresh);
+                    }
                 } else {
                     scheduler.cancel(alarm);
                 }
