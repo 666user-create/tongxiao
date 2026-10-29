@@ -379,6 +379,21 @@ public class UnlockActivity extends AppCompatActivity implements SensorEventList
         }
     }
 
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // Keep the alarm's heads-up banner off the question text.
+        com.course.tongxiao.alarm.RingService.setUiVisible(this, true);
+    }
+
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        com.course.tongxiao.alarm.RingService.setUiVisible(this, false);
+    }
+
     @Override
     protected void onDestroy() {
         unregisterSensor();

@@ -279,6 +279,15 @@ public class StopRingActivity extends Activity {
         }
     }
 
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // Our own stop screen is in front: move the ongoing notification to the quiet
+        // channel so its heads-up banner cannot cover this page.
+        RingService.setUiVisible(this, true);
+    }
+
     @Override
     protected void onPause() {
         // The auto-challenge runnable is posted on a delay. Leaving the screen means
@@ -286,6 +295,7 @@ public class StopRingActivity extends Activity {
         // shut-down executor and crash with RejectedExecutionException on the UI
         // thread — exactly when the user had just tapped 停止 with a challenge set.
         main.removeCallbacks(autoChallenge);
+        RingService.setUiVisible(this, false);
         super.onPause();
     }
 

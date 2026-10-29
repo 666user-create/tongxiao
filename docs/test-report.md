@@ -1,13 +1,13 @@
 # 同晓 · 测试报告
 
 > 生成方式：本文件由用户在模拟器 `Pixel_7_API_36` 上实跑的 `gradlew connectedDebugAndroidTest` 结果与各里程碑关卡记录汇总。
-> 状态：**已完成**（最终全量运行：375 tests / 0 failed / 0 skipped，模拟器 Pixel_7_API_36）
+> 状态：**已完成**（最终全量运行：377 tests / 0 failed / 0 skipped，模拟器 Pixel_7_API_36）
 
 ## 1. 结论速览
 
 | 项目 | 结果 |
 |---|---|
-| 单元/集成测试（instrumentation） | **375 tests / 0 failed / 0 errors / 0 skipped** |
+| 单元/集成测试（instrumentation） | **377 tests / 0 failed / 0 errors / 0 skipped** |
 | 构建（G1，含 lint） | `BUILD SUCCESSFUL`，lint **0 error**，仅余 2 条已知提示 |
 | 手动验证（G5） | 保存落库、滚轮时间选择、响铃全链路、Provider 只读、双机互助（见 §4） |
 
@@ -173,7 +173,7 @@ Lead 随后按报告拍板的两项设计决策 + 三项打磨：
 | 项 | 结果 |
 |---|---|
 | `gradlew build`（含 release 变体与 lint） | BUILD SUCCESSFUL；lint **0 error / 0 warning** |
-| `connectedDebugAndroidTest`（先 `pm clear`） | **375 tests / 0 failed / 0 errors / 0 skipped** |
+| `connectedDebugAndroidTest`（先 `pm clear`） | **377 tests / 0 failed / 0 errors / 0 skipped** |
 | 冷启动 / 四 tab | 正常（闹钟 / 互助 / 统计 / 设置），无重复 Fragment |
 | 新建闹钟 → 保存 → 系统注册 | `dumpsys alarm` 显示 `RTC_WAKEUP` + `exactAllowReason=policy_permission` + `showIntent=startActivity`（全屏页链路已排程） |
 | 关闭闹钟 | "下次"行消失，`dumpsys alarm` 活动注册 **2 → 0** |
@@ -304,6 +304,26 @@ socket 写只发生在写线程；链路断开时清空队列（不重放过期�
 `CMD_MUTE{ownerDev,alarmUid}`、对端回 `CMD_ACK{ok,what:"MUTE:..."}`，无崩溃。
 
 > 这是本轮最有价值的一条：三次全量回归、375 条测试都没发现它——只有"真的点一下按钮"才发现。
+
+## 5.13 录演示视频时发现的真 bug：响铃横幅盖住题干
+
+用户看完成片后指出"**这里完全看不见题目**"——回看视频确认：停铃挑战页只有四个选项，
+题干被系统弹窗式的响铃通知（heads-up banner）盖住了。
+
+**根因**：`RingService` 的响铃通知建在 `IMPORTANCE_HIGH` 通道上，Android 会把它以横幅形式
+叠在应用最上层；而停铃页/挑战页的题干正好在顶部，于是被遮住。真机上用户也会遇到同样问题
+（且横幅消失前无法作答，体验很差）。
+
+**修复**：新增一条 `alarm_ringing_quiet` 通道（`IMPORTANCE_LOW`，无声，由 MediaPlayer 负责响铃）。
+停铃页 / 挑战页 `onResume` 时调用 `RingService.setUiVisible(context, true)` → 服务把同一条
+常驻通知改投到静默通道（**不会再弹横幅**）；`onPause` 时切回响亮通道，保证离开页面后通知仍然醒目。
+
+验证：
+- `dumpsys notification` 实测挑战页在前台时通知通道为 `alarm_ringing_quiet`（importance=2），
+  离开后回到 `alarm_ringing`（importance=4）；
+- 截图确认题干「100 减 37 等于？」与四个选项完整可见；
+- 新增 `RingChannelsTest`（2 条：两条通道的重要性、无响铃时调用不崩），**377/377** 全绿；
+- 重录该段并重新合成成片（2 分 42 秒），题干清晰可见。
 ## 6. 已知未覆盖项
 
 - 真实跨设备 NSD 发现（模拟器只覆盖了 127.0.0.1 回环；真机需同热点）

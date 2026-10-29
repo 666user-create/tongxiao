@@ -196,12 +196,15 @@ if (Want "S3") {
     & $adb -s $Serial shell am start -n com.course.tongxiao/.MainActivity 2>&1 | Out-Null
     Sleep 1
 
-    StartRec "03_ring_challenge" 130
-    # 提前 8 秒开始"等"，让画面里能看到闹钟到点弹出
-    $wait = [Math]::Max(5, $delta - 8)
-    Sleep $wait
-    $ui = Dump "s3a"
-    Write-Host ("  ring panel: " + ([bool]($ui -match "停止")))
+    StartRec "03_ring_challenge" 150
+    # 轮询等响铃：固定 sleep 会因"保存/重开 App"耗时而不准（踩过两次）
+    $ui = $null
+    for ($probe = 0; $probe -lt 40; $probe++) {
+        Sleep 2
+        $ui = Dump "s3a"
+        if ($ui -match "停止") { break }
+    }
+    Write-Host ("  ring appeared after ~" + (($probe + 1) * 2) + "s: " + ([bool]($ui -match "停止")))
     $panel = CoordPartial $ui "点按打开停铃页"
     if ($panel) { TapAt $panel.x $panel.y; Sleep 2.5 }
     $ui = Dump "s3b"
@@ -224,12 +227,26 @@ if (Want "S3") {
         # 先故意答错一次（画面里会出现"答错了"反馈）
         TapAt $answers[0].x $answers[0].y
         Sleep 3.5
-        # 再逐个试，直到停铃页消失（说明某一项答对、闹钟停了）
-        for ($round = 0; $round -lt 10; $round++) {
-            TapAt $answers[$round % 4].x $answers[$round % 4].y
+        # 再逐个试，直到挑战页消失（说明答对、闹钟停了）。
+        # 判据用"答对才能停铃"而不是"停止"：进入挑战页后页面上已经没有"停止"按钮了，
+        # 用后者会立刻退出循环（这个坑踩过）。
+        for ($round = 0; $round -lt 12; $round++) {
+            $ui = Dump "s3probe"
+            if ($ui -notmatch "答对才能停铃") { break }
+            # 每轮重新取一次选项坐标：换题后文字长短不同，位置会变
+            $fresh = [regex]::Matches($ui, 'text="([^"]{1,16})"[^>]*?bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"')
+            $opts = @()
+            foreach ($mm in $fresh) {
+                $label = $mm.Groups[1].Value
+                if ($label -notmatch '题|答|停止|紧急|第' -and $label.Trim().Length -gt 0) {
+                    $opts += @{ x = [int](([int]$mm.Groups[2].Value + [int]$mm.Groups[4].Value) / 2)
+                                y = [int](([int]$mm.Groups[3].Value + [int]$mm.Groups[5].Value) / 2) }
+                }
+            }
+            $opts = $opts | Select-Object -Last 4
+            if ($opts.Count -lt 4) { break }
+            TapAt $opts[$round % 4].x $opts[$round % 4].y
             Sleep 2.8
-            $ui = Dump "s3d"
-            if ($ui -notmatch "停止") { break }
         }
         Sleep 2
     }

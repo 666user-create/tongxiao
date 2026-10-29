@@ -66,7 +66,24 @@ public class RingService extends Service {
      */
     public static final String EXTRA_SILENT_ONLY = "silent_only";
 
-    private static final String CHANNEL_ID = "alarm_ringing";
+    public static final String CHANNEL_ID = "alarm_ringing";
+
+    /**
+     * Quiet twin of {@link #CHANNEL_ID}, used while the stop / challenge screen is in
+     * the foreground.
+     *
+     * <p>Why: a HIGH-importance alarm notification is posted as a heads-up banner, and
+     * on the challenge screen that banner sits on top of the question text — the user
+     * sees four options with no question. While our own full-screen UI is visible there
+     * is nothing to notify about, so the same ongoing notification is re-posted on a
+     * LOW-importance channel (no banner, no sound: the sound comes from MediaPlayer).
+     */
+    public static final String CHANNEL_ID_QUIET = "alarm_ringing_quiet";
+
+    /** Sent to the running service when our ring UI appears / disappears. */
+    public static final String ACTION_SET_UI_VISIBLE =
+            "com.course.tongxiao.action.SET_RING_UI_VISIBLE";
+    public static final String EXTRA_UI_VISIBLE = "ring_ui_visible";
 
     /** Upper bound for one ring (10 minutes): "宁可不响到没电". */
     private static final long MAX_RING_DURATION_MS = 10L * 60 * 1000;
@@ -83,6 +100,10 @@ public class RingService extends Service {
     private long ringStartedAt;
     private boolean ringing;
     private boolean destroyed;
+    /** True while the stop / challenge screen is in front of the user. */
+    private boolean ringUiVisible;
+    /** Label of the ringing alarm, so a re-post keeps the same title. */
+    private String ringingLabel = "";
 
     /**
      * Which alarm is ringing right now, process-wide. The dorm group needs this to
@@ -172,6 +193,20 @@ public class RingService extends Service {
             stopSelf();
             return START_NOT_STICKY;
         }
+        if (ACTION_SET_UI_VISIBLE.equals(intent.getAction())) {
+            boolean visible = intent.getBooleanExtra(EXTRA_UI_VISIBLE, false);
+            if (ringing && visible != ringUiVisible) {
+                ringUiVisible = visible;
+                NotificationManager nm = getSystemService(NotificationManager.class);
+                if (nm != null) {
+                    // Re-post on the other channel; the id stays the same so the user
+                    // still sees exactly one ongoing alarm notification.
+                    nm.notify(NOTIFICATION_ID, buildNotification(
+                            ringingAlarmIdValue(), ringingLabel, ringStartedAt()));
+                }
+            }
+            return ringing ? START_STICKY : START_NOT_STICKY;
+        }
         if (ACTION_STOP_RING.equals(intent.getAction())) {
             // The notification's 停止 action must do the SAME bookkeeping as the stop
             // screen: recording the event feeds the trend/adaptive samples, and for a
@@ -201,6 +236,10 @@ public class RingService extends Service {
 
         loadAlarmThenRing(alarmId);
         return START_STICKY;
+    }
+
+    private int ringingAlarmIdValue() {
+        return ringingAlarmId > 0 ? ringingAlarmId : alarmId;
     }
 
     private long ringStartedAt() {
@@ -237,7 +276,11 @@ public class RingService extends Service {
         // Refresh the notification so it carries the alarm's own label.
         NotificationManager nm = getSystemService(NotificationManager.class);
         if (nm != null) {
-            nm.notify(NOTIFICATION_ID, buildNotification(id, label, ringStartedAt()));
+            ringingLabel = label;
+        NotificationManager manager = getSystemService(NotificationManager.class);
+        if (manager != null) {
+            manager.notify(NOTIFICATION_ID, buildNotification(id, label, ringStartedAt()));
+        }
         }
 
         if (ringing) {
@@ -369,13 +412,15 @@ public class RingService extends Service {
                 this, REQ_STOP_ACTION, stopService,
                 PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
 
-        return new NotificationCompat.Builder(this, CHANNEL_ID)
+        String channelId = ringUiVisible ? CHANNEL_ID_QUIET : CHANNEL_ID;
+        return new NotificationCompat.Builder(this, channelId)
                 .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
                 .setContentTitle(TextUtils.isEmpty(label)
                         ? getString(R.string.ring_notification_title)
                         : label)
                 .setContentText(getString(R.string.ring_notification_text))
-                .setPriority(NotificationCompat.PRIORITY_MAX)
+                .setPriority(ringUiVisible
+                        ? NotificationCompat.PRIORITY_LOW : NotificationCompat.PRIORITY_MAX)
                 .setCategory(NotificationCompat.CATEGORY_ALARM)
                 .setOngoing(true)
                 .setAutoCancel(false)
@@ -390,12 +435,12 @@ public class RingService extends Service {
     }
 
     /**
-     * Creates the ring channel if it does not exist yet.
+     * Creates the ring channels if they do not exist yet.
      *
-     * <p>Public and static on purpose: {@code AlarmReceiver} posts a fallback
-     * notification when starting the foreground service is refused, and posting to a
-     * channel that was never created is dropped silently — the user would get no
-     * notification at all on a fresh install where the service never started.
+     * <p>Two channels on purpose: the loud one is what an alarm notification needs
+     * (heads-up so the user sees it from another screen), and the quiet twin is used
+     * while our own stop / challenge screen is in front of the user — otherwise the
+     * heads-up banner covers the question text.
      */
     public static void ensureChannel(@NonNull Context context) {
         NotificationManager nm = context.getSystemService(NotificationManager.class);
@@ -412,6 +457,33 @@ public class RingService extends Service {
         // bypassDnd needs notification-policy access and would be silently ignored;
         // USAGE_ALARM is what actually carries the alarm through priority-only DND.
         nm.createNotificationChannel(channel);
+
+        NotificationChannel quiet = new NotificationChannel(
+                CHANNEL_ID_QUIET,
+                context.getString(R.string.ring_channel_quiet_name),
+                NotificationManager.IMPORTANCE_LOW); // never a heads-up banner
+        quiet.setDescription(context.getString(R.string.ring_channel_quiet_desc));
+        quiet.setSound(null, null);
+        quiet.enableVibration(false);
+        nm.createNotificationChannel(quiet);
+    }
+
+    /**
+     * Tells the running service whether our ring UI is on screen, so the ongoing
+     * notification can move between the loud and the quiet channel.
+     *
+     * <p>Safe to call when nothing is ringing: the service starts, sees no alarm and
+     * stops itself again without showing anything.
+     */
+    public static void setUiVisible(@NonNull Context context, boolean visible) {
+        Intent intent = new Intent(context, RingService.class)
+                .setAction(ACTION_SET_UI_VISIBLE)
+                .putExtra(EXTRA_UI_VISIBLE, visible);
+        try {
+            context.startService(intent);
+        } catch (RuntimeException ignored) {
+            // Background start restrictions: the notification then simply stays loud.
+        }
     }
 
     private void recordTimeoutThenShutdown() {
