@@ -96,3 +96,25 @@ app/src/main/java/com/course/tongxiao/
 ├── provider/   只读 ContentProvider
 docs/           design.md（设计）、plan.md（执行计划）、test-report.md（测试报告）、ppt-outline.md（答辩大纲）、demo-script.md（演示脚本）、wrapup-plan.md（收尾计划）
 ```
+---
+
+## 仓库内容说明（哪些东西不在版本库）
+
+本仓库只放**源码、测试与文档**。以下内容按惯例不进 git（已在 `.gitignore` 中忽略，仅保留在本地）：
+
+| 内容 | 位置 | 说明 |
+|---|---|---|
+| 构建产物（APK/AAB/dex） | `app/build/outputs/`、`dist/` | 由 `gradlew assembleRelease` 生成；需要安装包时自行构建或从 Releases 附件下载 |
+| 演示视频 / 分镜图 | `dist/` | 录制脚本在 `tools/demo-peer/`，可随时重录 |
+| 验收截图、临时 dump | `.g5/` | 本地调试产物 |
+| 签名密钥 | 仓库外（`D:\Android\tongxiao-keys\`） | 绝不入库；`app/build.gradle` 里可用 `-PtongxiaoKeystore=...` 覆盖 |
+
+构建与验证命令：
+
+```bash
+./gradlew build                # 编译 + lint（等价于 CI 门禁 G1）
+./gradlew connectedDebugAndroidTest   # 全量 UI/集成测试（需要模拟器或真机）
+```
+
+一轮完整回归的结果记录在 `docs/test-report.md`，验收步骤见 `docs/acceptance-checklist.md`，
+演示视频的分镜与配音稿见 `docs/demo-shot-list.md`。
