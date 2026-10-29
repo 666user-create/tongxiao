@@ -396,4 +396,26 @@ public class GroupManagerTest {
             return null;
         }
     }
+    /**
+     * Regression: the remote-mute button calls {@code send()} from the UI thread. A
+     * direct socket write there throws NetworkOnMainThreadException and takes the app
+     * down mid-demo (seen on device before the writer thread existed).
+     */
+    @Test
+    public void send_fromTheMainThread_doesNotThrow() {
+        handshake();
+        TestAwait.until("link ready", 5_000L, () -> managerA.broadcastSync() >= 0);
+        // Give both links a moment to finish the handshake before the main-thread write.
+        TestAwait.sleep(300L);
+
+        final boolean[] result = {false};
+        androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().runOnMainSync(
+                () -> result[0] = managerB.send(identityA.deviceId(),
+                        GroupMessage.cmdMute(identityA.deviceId(), "uid-main-thread")));
+        assertTrue("send() from the UI thread must be accepted (it only enqueues)", result[0]);
+
+        TestAwait.until("the queued frame actually reached A", 5_000L,
+                () -> gatewayA.muted.contains(identityB.deviceId() + "/uid-main-thread")
+                        || findAckMute(inboundAtB, true) != null);
+    }
 }

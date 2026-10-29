@@ -1,13 +1,13 @@
 # 同晓 · 测试报告
 
 > 生成方式：本文件由用户在模拟器 `Pixel_7_API_36` 上实跑的 `gradlew connectedDebugAndroidTest` 结果与各里程碑关卡记录汇总。
-> 状态：**已完成**（最终全量运行：374 tests / 0 failed / 0 skipped，模拟器 Pixel_7_API_36）
+> 状态：**已完成**（最终全量运行：375 tests / 0 failed / 0 skipped，模拟器 Pixel_7_API_36）
 
 ## 1. 结论速览
 
 | 项目 | 结果 |
 |---|---|
-| 单元/集成测试（instrumentation） | **374 tests / 0 failed / 0 errors / 0 skipped** |
+| 单元/集成测试（instrumentation） | **375 tests / 0 failed / 0 errors / 0 skipped** |
 | 构建（G1，含 lint） | `BUILD SUCCESSFUL`，lint **0 error**，仅余 2 条已知提示 |
 | 手动验证（G5） | 保存落库、滚轮时间选择、响铃全链路、Provider 只读、双机互助（见 §4） |
 
@@ -173,7 +173,7 @@ Lead 随后按报告拍板的两项设计决策 + 三项打磨：
 | 项 | 结果 |
 |---|---|
 | `gradlew build`（含 release 变体与 lint） | BUILD SUCCESSFUL；lint **0 error / 0 warning** |
-| `connectedDebugAndroidTest`（先 `pm clear`） | **374 tests / 0 failed / 0 errors / 0 skipped** |
+| `connectedDebugAndroidTest`（先 `pm clear`） | **375 tests / 0 failed / 0 errors / 0 skipped** |
 | 冷启动 / 四 tab | 正常（闹钟 / 互助 / 统计 / 设置），无重复 Fragment |
 | 新建闹钟 → 保存 → 系统注册 | `dumpsys alarm` 显示 `RTC_WAKEUP` + `exactAllowReason=policy_permission` + `showIntent=startActivity`（全屏页链路已排程） |
 | 关闭闹钟 | "下次"行消失，`dumpsys alarm` 活动注册 **2 → 0** |
@@ -279,6 +279,31 @@ Lead 随后按报告拍板的两项设计决策 + 三项打磨：
 | 3 | 打开 `buildFeatures.buildConfig` | 版本号需要 `BuildConfig`（AGP 8 默认关闭） |
 
 验证：`build` 成功、lint 0/0、**374/374** 测试绿；真机（v0.2）底部 tab 与互助页文案均为"互助/互助组/组员"，无"宿舍"。
+
+## 5.12 双人互助实机演示抓到的 P0：点"静音"必崩
+
+为了给老师录一段"两台设备同组"的演示视频，我用真实协议对端（`tools/demo-peer/peer.py`，
+通过 `adb forward` 接入 App 的 PeerServer）在模拟器上跑通了完整互助链路。**第一次点"静音"就崩了**：
+
+```
+android.os.NetworkOnMainThreadException
+  at java.net.SocketOutputStream.write
+  at com.course.tongxiao.group.net.PeerLink.send(PeerLink.java:169)
+  at com.course.tongxiao.group.GroupManager.send(GroupManager.java:213)
+  at com.course.tongxiao.group.ui.GroupFragment.requestMute(GroupFragment.java:796)
+```
+
+**根因**：`PeerLink.send()` 直接在调用线程写 socket。所有自动化测试都是从 socket 线程调用它，
+所以一直是绿的；而"静音"按钮在 **UI 线程**上调用它——真机上必然崩，且正好是演示最关键的按钮。
+
+**修复**：`PeerLink` 增加一条有界发送队列（64 帧）+ 独立写线程，`send()` 只入队，
+socket 写只发生在写线程；链路断开时清空队列（不重放过期指令）。
+
+**回归**：新增 `send_fromTheMainThread_doesNotThrow`（用 `runOnMainSync` 从主线程调用，
+断言入队成功且帧真的到达对端）。修复后 **375/375** 全绿，真机复测：App 发出
+`CMD_MUTE{ownerDev,alarmUid}`、对端回 `CMD_ACK{ok,what:"MUTE:..."}`，无崩溃。
+
+> 这是本轮最有价值的一条：三次全量回归、375 条测试都没发现它——只有"真的点一下按钮"才发现。
 ## 6. 已知未覆盖项
 
 - 真实跨设备 NSD 发现（模拟器只覆盖了 127.0.0.1 回环；真机需同热点）

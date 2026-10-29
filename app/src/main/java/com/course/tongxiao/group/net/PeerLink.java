@@ -46,6 +46,9 @@ public class PeerLink implements Closeable {
 
     private static final String TAG = "PeerLink";
 
+    /** Bounded so a dead peer cannot grow the queue without limit. */
+    private static final int MAX_PENDING_FRAMES = 64;
+
     /** Events of one connection, always delivered on the link's own reader thread. */
     public interface Listener {
         /** Streams are ready: this is the moment to send HELLO. */
@@ -112,6 +115,18 @@ public class PeerLink implements Closeable {
     private volatile boolean started;
     private volatile Thread thread;
 
+    /**
+     * Frames waiting for the writer thread.
+     *
+     * <p>Writes must never happen on the caller's thread: {@code send()} is invoked from
+     * UI click handlers (remote mute, accept/deny a request), and a socket write there
+     * throws {@link android.os.NetworkOnMainThreadException} on Android. One ordered
+     * queue per link keeps the protocol order and makes {@code send()} cheap.
+     */
+    private final java.util.concurrent.BlockingQueue<byte[]> pendingFrames =
+            new java.util.concurrent.LinkedBlockingQueue<>(MAX_PENDING_FRAMES);
+    private volatile Thread writer;
+
     private PeerLink(@NonNull String peerKey, @Nullable Socket inboundSocket,
                      @Nullable Connector connector, @NonNull Listener listener,
                      @NonNull Config config) {
@@ -145,6 +160,9 @@ public class PeerLink implements Closeable {
         Thread t = new Thread(this::run, "peerlink-" + peerKey);
         thread = t;
         t.start();
+        Thread w = new Thread(this::writeLoop, "peerlink-writer-" + peerKey);
+        writer = w;
+        w.start();
     }
 
     @NonNull
@@ -157,23 +175,49 @@ public class PeerLink implements Closeable {
         return output != null && !closed;
     }
 
-    /** @return false when the link is down; the caller should queue/retry later. */
+    /**
+     * Queues one message for the writer thread and returns immediately.
+     *
+     * <p>Safe to call from the UI thread (that is the whole point: the remote-mute
+     * button calls it). The actual socket write happens on this link's writer thread,
+     * so a slow or dead peer can never block or crash a click handler.
+     *
+     * @return false when the link is down or the queue is full; the caller should
+     *         retry later (the UI already reports "no link")
+     */
     public boolean send(@NonNull GroupMessage message) {
-        OutputStream out = output;
-        if (out == null) {
+        if (output == null || closed) {
             return false;
         }
-        byte[] frame = MessageCodec.encode(message);
-        try {
-            synchronized (writeLock) {
-                out.write(frame);
-                out.flush();
-            }
-            return true;
-        } catch (IOException e) {
-            Log.w(TAG, peerKey + ": write failed: " + e.getMessage());
-            shutCurrentSocket("write failed");
+        if (!pendingFrames.offer(MessageCodec.encode(message))) {
+            Log.w(TAG, peerKey + ": outbound queue full, frame dropped");
             return false;
+        }
+        return true;
+    }
+
+    /** Writer thread: the only place that touches the output stream. */
+    private void writeLoop() {
+        while (!closed) {
+            byte[] frame;
+            try {
+                frame = pendingFrames.take();
+            } catch (InterruptedException e) {
+                return;
+            }
+            OutputStream out = output;
+            if (out == null) {
+                continue; // link is down; queued frames are dropped, not replayed stale
+            }
+            try {
+                synchronized (writeLock) {
+                    out.write(frame);
+                    out.flush();
+                }
+            } catch (IOException e) {
+                Log.w(TAG, peerKey + ": write failed: " + e.getMessage());
+                shutCurrentSocket("write failed");
+            }
         }
     }
 
@@ -182,6 +226,11 @@ public class PeerLink implements Closeable {
     public void close() {
         closed = true;
         shutCurrentSocket("closed locally");
+        pendingFrames.clear();
+        Thread w = writer;
+        if (w != null && w != Thread.currentThread()) {
+            w.interrupt(); // wakes the queue take()
+        }
         Thread t = thread;
         if (t != null && t != Thread.currentThread()) {
             t.interrupt(); // wakes the backoff sleep
