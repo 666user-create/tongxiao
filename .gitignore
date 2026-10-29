@@ -23,3 +23,6 @@ captures/
 
 # G5 verification artifacts
 .g5/
+
+# Build outputs & demo recordings (kept locally, not in git)
+dist/
