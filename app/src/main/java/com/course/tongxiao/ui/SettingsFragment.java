@@ -80,6 +80,13 @@ public class SettingsFragment extends Fragment {
         regionClear = view.findViewById(R.id.settings_region_clear);
         masterSwitch = view.findViewById(R.id.settings_group_master);
         customQuestionsSummary = view.findViewById(R.id.settings_custom_questions_summary);
+        TextView version = view.findViewById(R.id.settings_version);
+        if (version != null) {
+            // Lets the user (and the course reviewer) confirm which build is installed.
+            version.setText(getString(R.string.settings_version,
+                    com.course.tongxiao.BuildConfig.VERSION_NAME,
+                    com.course.tongxiao.BuildConfig.VERSION_CODE));
+        }
         view.findViewById(R.id.settings_custom_questions).setOnClickListener(v ->
                 startActivity(new android.content.Intent(requireContext(),
                         CustomQuestionActivity.class)));

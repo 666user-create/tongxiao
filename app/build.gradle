@@ -10,8 +10,8 @@ android {
         applicationId = 'com.course.tongxiao'
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = '0.1'
+        versionCode = 2
+        versionName = '0.2'
         testInstrumentationRunner = 'androidx.test.runner.AndroidJUnitRunner'
         // Room schema JSON is committed under schemas/ (G5: field-by-field review).
         javaCompileOptions {
@@ -19,6 +19,12 @@ android {
                 arguments += ['room.schemaLocation': "$projectDir/schemas".toString()]
             }
         }
+    }
+
+    buildFeatures {
+        // The settings page prints the version, so "which build am I running?" has an
+        // answer without hunting through the APK.
+        buildConfig = true
     }
 
     compileOptions {

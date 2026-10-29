@@ -150,6 +150,15 @@
             android:textColor="@color/muted"
             android:textSize="12sp" />
 
+        <TextView
+            android:id="@+id/settings_version"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="28dp"
+            android:gravity="center"
+            android:textColor="@color/muted"
+            android:textSize="11sp" />
+
     </LinearLayout>
 
     </ScrollView>

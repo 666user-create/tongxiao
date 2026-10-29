@@ -117,6 +117,7 @@
     <string name="settings_group_master_helper">关闭后不再接受任何组员的静音/代设指令（不会清除已授权项）</string>
 
     <!-- Custom challenge questions (design.md §5.4) -->
+    <string name="settings_version">同晓 v%1$s（build %2$d）</string>
     <string name="settings_custom_questions">自定义题目（停铃挑战）</string>
     <string name="settings_custom_questions_summary">%1$d 道题 · 点进去新增或删除</string>
     <string name="settings_custom_questions_none">还没有自定义题目</string>

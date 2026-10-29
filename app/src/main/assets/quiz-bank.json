@@ -6,7 +6,7 @@
   {"q":"成年人建议的睡眠时长是？","options":["4-5 小时","6-7 小时","7-9 小时","10-12 小时"],"answer":2,"type":"GENERAL","difficulty":1},
   {"q":"闹钟响后立刻按“贪睡”会？","options":["提高睡眠质量","让起床更困难","延长深睡","减少疲劳"],"answer":1,"type":"GENERAL","difficulty":2},
   {"q":"以下哪种做法最能减少起床痛苦？","options":["多按几次贪睡","固定起床时间","睡前喝咖啡","通宵后补觉"],"answer":1,"type":"GENERAL","difficulty":1},
-  {"q":"宿舍里别人闹钟吵醒你，最合适的做法是？","options":["忍着","沟通或使用互助功能协调","把他叫醒","拔电源"],"answer":1,"type":"GENERAL","difficulty":1},
+  {"q":"同住的人闹钟吵醒你，最合适的做法是？","options":["忍着","沟通或使用互助功能协调","把他叫醒","拔电源"],"answer":1,"type":"GENERAL","difficulty":1},
   {"q":"若 a=3，b=4，则 a²+b²=？","options":["7","12","25","49"],"answer":2,"type":"ARITHMETIC","difficulty":1},
   {"q":"若 5x=45，则 x=？","options":["5","8","9","10"],"answer":2,"type":"ARITHMETIC","difficulty":1},
   {"q":"一打等于多少个？","options":["6","10","12","24"],"answer":2,"type":"ARITHMETIC","difficulty":1},
